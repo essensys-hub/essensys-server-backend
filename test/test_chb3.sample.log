@@ -1,0 +1,16 @@
+/Users/nrineau/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+--- STEP 1: Turn ON ---
+[TEST] Injecting Action: k=613, v=64
+[TEST] Injection OK
+[TEST] Verifying action content...
+[TEST] Verification SUCCESS: JSON matches standard format.
+[TEST] Waiting for client to acknowledge (queue empty)...
+Traceback (most recent call last):
+  File "/Users/nrineau/Projects/essensys-server-backend/./test_chb3.py", line 111, in <module>
+    main()
+  File "/Users/nrineau/Projects/essensys-server-backend/./test_chb3.py", line 96, in main
+    wait_for_done()
+  File "/Users/nrineau/Projects/essensys-server-backend/./test_chb3.py", line 47, in wait_for_done
+    time.sleep(0.5)
+KeyboardInterrupt

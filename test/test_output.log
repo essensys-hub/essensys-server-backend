@@ -1,0 +1,23 @@
+/Users/nrineau/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+--- STEP 1: Turn ON ---
+[TEST] Injecting Action: k=613, v=64
+[TEST] Injection OK
+[TEST] Verifying action content...
+[TEST] Verification SUCCESS: JSON matches standard format.
+[TEST] Simulating client acknowledgment...
+[TEST] Acknowledged action: c0971b82-95dc-a084-15b6-c0eff817a689
+[TEST] Action queue empty. Done.
+
+[TEST] Waiting 10 seconds...
+
+--- STEP 2: Turn OFF ---
+[TEST] Injecting Action: k=607, v=64
+[TEST] Injection OK
+[TEST] Verifying action content...
+[TEST] Verification SUCCESS: JSON matches standard format.
+[TEST] Simulating client acknowledgment...
+[TEST] Acknowledged action: f53b0ba8-0bc3-e1f2-34b0-389ad0ca4b42
+[TEST] Action queue empty. Done.
+
+[TEST] Sequence Completed Successfully.
