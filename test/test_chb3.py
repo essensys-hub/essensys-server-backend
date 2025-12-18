@@ -29,13 +29,9 @@ def inject_action(k, v):
         sys.exit(1)
 
 def wait_for_done():
-    print("[TEST] Simulating client acknowledgment...")
-    max_attempts = 20  # 10 seconds max
-    attempt = 0
-    
-    while attempt < max_attempts:
+    print("[TEST] Waiting for client to acknowledge (queue empty)...")
+    while True:
         try:
-            # Get pending actions
             resp = requests.get(ACTIONS_URL)
             resp.raise_for_status()
             data = resp.json()
@@ -45,25 +41,13 @@ def wait_for_done():
                 print("[TEST] Action queue empty. Done.")
                 return
             
-            # Acknowledge each action (simulate client behavior)
-            for action in actions:
-                guid = action.get("guid")
-                if guid:
-                    done_url = f"{SERVER_URL}/api/done/{guid}"
-                    done_resp = requests.post(done_url)
-                    done_resp.raise_for_status()
-                    print(f"[TEST] Acknowledged action: {guid}")
+            # Optional: Print what's pending
+            # print(f"[TEST] Pending: {len(actions)} actions")
             
             time.sleep(0.5)
-            attempt += 1
-            
         except Exception as e:
-            print(f"[TEST] Error during acknowledgment: {e}")
-            time.sleep(0.5)
-            attempt += 1
-    
-    print("[TEST] WARNING: Timeout waiting for queue to empty")
-    sys.exit(1)
+            print(f"[TEST] Error polling actions: {e}")
+            time.sleep(1)
 
 def verify_action_content(expected_k, expected_v):
     print("[TEST] Verifying action content...")
