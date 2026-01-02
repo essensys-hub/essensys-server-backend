@@ -7,22 +7,7 @@ import (
 	"github.com/essensys-hub/essensys-server-backend/pkg/protocol"
 )
 
-// Store defines the interface for data storage operations
-type Store interface {
-	// Exchange Table operations
-	GetValue(clientID string, index int) (string, bool)
-	SetValue(clientID string, index int, value string)
-	GetAllValues(clientID string, indices []int) []protocol.ExchangeKV
-
-	// Action Queue operations
-	EnqueueAction(clientID string, action protocol.Action)
-	DequeueActions(clientID string) []protocol.Action
-	AcknowledgeAction(clientID string, guid string) bool
-
-	// Client management
-	IsClientConnected(clientID string) bool
-	SetClientConnected(clientID string, connected bool)
-}
+// Store interface is defined in store.go
 
 // ExchangeTable is a thread-safe key-value store for exchange table data
 type ExchangeTable struct {
