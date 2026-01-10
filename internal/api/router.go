@@ -29,6 +29,7 @@ func NewRouter(handler *Handler, validCredentials map[string]string, authEnabled
 	mainMux.Handle("/api/", apiHandler)
 	mainMux.HandleFunc("/health", healthCheckHandler)
 	mainMux.HandleFunc("/debug", handler.GetDebug) // Debug interface (public/unauthenticated or strict if moved to apiMux)
+    mainMux.HandleFunc("/debug/logs", handler.GetDebugLogs) // Pollable logs
 
 	// Wire up middleware chain: Recovery → Logging → Routes
 	// The chain is applied in reverse order (innermost to outermost)

@@ -11,10 +11,43 @@ import (
 	"github.com/essensys-hub/essensys-server-backend/internal/middleware"
 	"github.com/essensys-hub/essensys-server-backend/pkg/protocol"
     _ "embed"
+    "sync"
+    "time"
+    "fmt"
 )
 
 //go:embed debug.html
 var debugHTML []byte
+
+// Simple in-memory log buffer for debug interface
+var (
+    debugLogs      []string
+    debugLogMutex  sync.Mutex
+    maxDebugLogs   = 50
+)
+
+func addDebugLog(format string, args ...interface{}) {
+    debugLogMutex.Lock()
+    defer debugLogMutex.Unlock()
+    
+    msg := fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), fmt.Sprintf(format, args...))
+    debugLogs = append([]string{msg}, debugLogs...)
+    
+    if len(debugLogs) > maxDebugLogs {
+        debugLogs = debugLogs[:maxDebugLogs]
+    }
+}
+
+// GetDebugLogs handles GET /debug/logs
+func (h *Handler) GetDebugLogs(w http.ResponseWriter, r *http.Request) {
+    debugLogMutex.Lock()
+    logs := make([]string, len(debugLogs))
+    copy(logs, debugLogs)
+    debugLogMutex.Unlock()
+    
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]interface{}{"logs": logs})
+}
 
 // Handler contains HTTP request handlers
 type Handler struct {
@@ -91,6 +124,7 @@ func (h *Handler) PostMyStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Log status update (similar to server.sample.go)
 	log.Printf("[GO] Status Update (Version: %s, Items: %d)", statusReq.Version, len(statusReq.EK))
+    // addDebugLog("Status received (Items: %d)", len(statusReq.EK)) // Optional: can be too noisy
 
 	// Update status in the store
 	if err := h.statusService.UpdateStatus(clientID, statusReq); err != nil {
@@ -113,6 +147,12 @@ func (h *Handler) GetMyActions(w http.ResponseWriter, r *http.Request) {
 
 	// Get all pending actions for the client
 	actions := h.store.DequeueActions(clientID)
+    
+    if len(actions) > 0 {
+        addDebugLog("Client retrieved %d actions (GUIDs: %v)", len(actions), getGuids(actions))
+    } else {
+        // addDebugLog("Client polled for actions (Empty)") // Too noisy
+    }
 
 	// Build response with proper field ordering (_de67f before actions)
 	response := protocol.ActionsResponse{
@@ -135,6 +175,14 @@ func (h *Handler) GetMyActions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func getGuids(actions []protocol.Action) []string {
+    guids := make([]string, len(actions))
+    for i, a := range actions {
+        guids[i] = a.GUID
+    }
+    return guids
+}
+
 // PostDone handles POST /api/done/{guid}
 func (h *Handler) PostDone(w http.ResponseWriter, r *http.Request) {
 	// Get client ID from context (set by auth middleware)
@@ -154,12 +202,14 @@ func (h *Handler) PostDone(w http.ResponseWriter, r *http.Request) {
 	// Acknowledge the action
 	found := h.store.AcknowledgeAction(clientID, guid)
 	if !found {
+        addDebugLog("Client tried to confirm unknown/expired GUID: %s", guid)
 		http.Error(w, "Action not found", http.StatusNotFound)
 		return
 	}
 
 	// Log acknowledgment (like server.sample.go)
 	log.Printf("[GO] Action acknowledged: %s", guid)
+    addDebugLog("Client CONFIRMED action: %s", guid)
 
 	// Set Content-Type header with space before semicolon (as per requirement 5.5)
 	w.Header().Set("Content-Type", "application/json ;charset=UTF-8")
@@ -204,6 +254,8 @@ func (h *Handler) PostAdminInject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to add action", http.StatusInternalServerError)
 		return
 	}
+    
+    addDebugLog("Injected action: %s (Params: %v)", guid, params)
 
 	// Build response
 	response := map[string]string{
