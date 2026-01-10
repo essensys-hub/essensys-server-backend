@@ -40,3 +40,4 @@ func (StateIndex) TableName() string {
 	return "es_state_index"
 }
 
+

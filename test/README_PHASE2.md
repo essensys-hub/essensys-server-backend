@@ -205,3 +205,4 @@ Une fois les tests passés, vous pouvez :
 2. Configurer la connexion PostgreSQL dans la configuration
 3. Passer à la Phase 3 : Authentification
 
+

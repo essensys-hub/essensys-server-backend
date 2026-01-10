@@ -41,3 +41,4 @@ func (ActionIndex) TableName() string {
 	return "es_action_index"
 }
 
+

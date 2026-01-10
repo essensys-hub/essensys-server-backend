@@ -148,3 +148,4 @@ func (r *UserRepository) CheckNoSerieExists(noSerie string) (bool, error) {
 	return count > 0, nil
 }
 
+

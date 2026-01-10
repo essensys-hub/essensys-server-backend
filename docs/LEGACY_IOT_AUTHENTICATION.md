@@ -264,3 +264,4 @@ Après migration, tester avec un client legacy pour vérifier que :
 - Code source : `client-essensys-legacy/Ethernet/Cryptage.c`
 - Code serveur : `internal/middleware/auth.go` (fonction `BasicAuthDB`)
 
+

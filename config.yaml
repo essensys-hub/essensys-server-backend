@@ -1,0 +1,30 @@
+# Essensys Backend Server Configuration
+# This is an example configuration file. Copy to config.yaml and customize.
+
+server:
+  # Port 80 is MANDATORY for BP_MQX_ETH client compatibility
+  # The firmware is hardcoded to connect to port 80
+  port: 80
+  
+  # HTTP server timeouts
+  read_timeout: 10s
+  write_timeout: 10s
+  idle_timeout: 60s
+
+auth:
+  # Enable/disable authentication (disabled by default)
+  enabled: false
+  
+  # Client credentials (matricule: key pairs)
+  # The matricule is typically the MAC address + server key
+  clients:
+    testclient: testpass
+    # Add more clients as needed:
+    # 123456789abcdef: fedcba0987654321
+
+logging:
+  # Log level: debug, info, warn, error
+  level: info
+  
+  # Log format: text or json
+  format: text

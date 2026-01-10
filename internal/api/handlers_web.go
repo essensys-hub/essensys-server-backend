@@ -489,3 +489,4 @@ func formatActivationCode(code string) string {
 	return formatted
 }
 
+

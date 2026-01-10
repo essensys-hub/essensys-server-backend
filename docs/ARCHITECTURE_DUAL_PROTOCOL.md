@@ -356,3 +356,4 @@ L'architecture dual-protocol permet de :
 
 **Règle d'or** : Le protocole legacy est **sacré** et ne doit jamais être modifié.
 
+

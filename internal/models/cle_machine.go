@@ -21,3 +21,4 @@ func (CleMachine) TableName() string {
 	return "es_cle_machine"
 }
 
+

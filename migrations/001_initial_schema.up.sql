@@ -191,3 +191,4 @@ INSERT INTO es_data_index (index_key, is_active) VALUES
     ('618', true), ('619', true), ('620', true), ('621', true), ('622', true), ('920', true)
 ON CONFLICT (index_key) DO NOTHING;
 
+

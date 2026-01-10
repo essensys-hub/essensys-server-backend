@@ -120,3 +120,4 @@ user := models.User{
 3. **Sécurité** : Les champs sensibles ne sont jamais sérialisés en JSON
 4. **Extensibilité** : Le schéma peut être étendu avec de nouvelles migrations sans affecter les données existantes
 
+

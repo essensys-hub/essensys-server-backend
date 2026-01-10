@@ -59,3 +59,4 @@ psql -U user -d essensys -f migrations/001_initial_schema.down.sql
 - Les timestamps utilisent le type `TIMESTAMP` PostgreSQL
 - Les booléens utilisent le type `BOOLEAN` PostgreSQL
 
+

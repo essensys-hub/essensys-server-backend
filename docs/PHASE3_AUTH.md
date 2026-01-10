@@ -324,3 +324,4 @@ La Phase 4 consiste à implémenter les services métier (Alarme, Chauffage, Arr
 3. **CORS** : Configurer les origines autorisées selon l'environnement
 4. **Email** : L'envoi d'emails n'est pas encore implémenté (TODO)
 
+

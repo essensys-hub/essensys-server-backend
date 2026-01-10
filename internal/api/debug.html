@@ -63,6 +63,8 @@
             overflow-x: auto;
             font-size: 13px;
             margin: 0;
+            height: 300px;
+            overflow-y: scroll;
         }
 
         .log-entry {
@@ -103,18 +105,35 @@
     </div>
 
     <div class="card">
-        <h3>Logs / Response</h3>
+        <h3>Logs / Response (Real-time)</h3>
+        <p style="color: #666; font-size: 13px;">Auto-refreshing every 1s...</p>
         <pre id="logs">// Waiting for actions...</pre>
     </div>
 
     <script>
-        function log(message, type = 'info') {
-            const logs = document.getElementById('logs');
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${type}`;
-            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-            logs.insertBefore(entry, logs.firstChild);
+        function renderLogs(logList) {
+            const logsContainer = document.getElementById('logs');
+            logsContainer.innerHTML = logList.join('\n');
         }
+
+        async function pollLogs() {
+            try {
+                const response = await fetch('/debug/logs');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.logs && data.logs.length > 0) {
+                        renderLogs(data.logs);
+                    }
+                }
+            } catch (e) {
+                console.error("Polling error", e);
+            }
+        }
+
+        // Poll every 1 second
+        setInterval(pollLogs, 1000);
+        // Initial poll
+        pollLogs();
 
         async function sendInjection() {
             const keys = document.getElementsByClassName('key-input');
@@ -130,11 +149,9 @@
             }
 
             if (payload.length === 0) {
-                log("Please enter at least one key/value pair.", "error");
+                alert("Please enter at least one key/value pair.");
                 return;
             }
-
-            log(`Sending payload: ${JSON.stringify(payload)}...`);
 
             try {
                 const response = await fetch('/api/admin/inject', {
@@ -143,16 +160,10 @@
                     body: JSON.stringify(payload)
                 });
 
-                const data = await response.json();
+                // Backend will log success/failure
 
-                if (response.ok) {
-                    log(`Success! Guid: ${data.guid}`, "success");
-                    log(`Backend response: ${JSON.stringify(data)}`, "success");
-                } else {
-                    log(`Error: ${data.error || response.statusText}`, "error");
-                }
             } catch (error) {
-                log(`Network Error: ${error.message}`, "error");
+                alert(`Network Error: ${error.message}`);
             }
         }
     </script>

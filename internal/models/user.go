@@ -37,3 +37,4 @@ func (User) TableName() string {
 	return "es_user"
 }
 
+

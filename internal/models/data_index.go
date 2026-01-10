@@ -20,3 +20,4 @@ func (DataIndex) TableName() string {
 	return "es_data_index"
 }
 
+

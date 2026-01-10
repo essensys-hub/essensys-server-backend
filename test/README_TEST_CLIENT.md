@@ -76,3 +76,4 @@ Les logs du serveur sont sauvegardés dans `test/server.log`.
 - Vérifiez que le serveur est bien démarré : `curl http://localhost/health`
 - Vérifiez que le port 80 n'est pas utilisé par un autre processus
 
+

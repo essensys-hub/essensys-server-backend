@@ -25,3 +25,4 @@ func (Machine) TableName() string {
 	return "es_machine"
 }
 
+
