@@ -10,7 +10,11 @@ import (
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
 	"github.com/essensys-hub/essensys-server-backend/internal/middleware"
 	"github.com/essensys-hub/essensys-server-backend/pkg/protocol"
+    _ "embed"
 )
+
+//go:embed debug.html
+var debugHTML []byte
 
 // Handler contains HTTP request handlers
 type Handler struct {
@@ -211,4 +215,11 @@ func (h *Handler) PostAdminInject(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json ;charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
+}
+
+// GetDebug handles GET /debug
+// Serves the HTML debug interface
+func (h *Handler) GetDebug(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "text/html; charset=utf-8")
+    w.Write(debugHTML)
 }
