@@ -124,7 +124,7 @@ func (h *Handler) PostMyStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Log status update (similar to server.sample.go)
 	log.Printf("[GO] Status Update (Version: %s, Items: %d)", statusReq.Version, len(statusReq.EK))
-    // addDebugLog("Status received (Items: %d)", len(statusReq.EK)) // Optional: can be too noisy
+    addDebugLog("Status received: %+v", statusReq.EK) // Log full content for debugging
 
 	// Update status in the store
 	if err := h.statusService.UpdateStatus(clientID, statusReq); err != nil {
