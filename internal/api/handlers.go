@@ -327,13 +327,20 @@ func (h *Handler) GetTableRef(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+    // Get pending actions (Peek)
+    queue := h.store.DequeueActions("default")
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	dataView := struct {
-		Count int
-		Items []Item
+		Count      int
+		Items      []Item
+        Queue      []protocol.Action
+        QueueCount int
 	}{
-		Count: len(items),
-		Items: items,
+		Count:      len(items),
+		Items:      items,
+        Queue:      queue,
+        QueueCount: len(queue),
 	}
 
 	if err := t.Execute(w, dataView); err != nil {

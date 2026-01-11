@@ -24,9 +24,36 @@ const TableRefHTML = `<!DOCTYPE html>
 </head>
 <body>
     <h1>Table de Référence (Redis)</h1>
-    <div class="stats">{{ .Count }} entrées trouvées</div>
+    <div class="stats">
+        <span>Table: {{ .Count }} entrées</span> | 
+        <span>Queue: {{ .QueueCount }} actions en attente</span>
+    </div>
     
-    {{ if .Items }}
+    {{ if .Queue }}
+    <h2>File d'Attente (Actions)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>GUID</th>
+                <th>Params</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range .Queue }}
+            <tr>
+                <td class="key">{{ .GUID }}</td>
+                <td class="value">
+                    {{ range .Params }}
+                    {{ .K }}:{{ .V }} 
+                    {{ end }}
+                </td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+    <br>
+    <h2>Table d'Échange</h2>
+    {{ end }}
     <table>
         <thead>
             <tr>
