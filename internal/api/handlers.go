@@ -74,7 +74,7 @@ func (h *Handler) GetServerInfos(w http.ResponseWriter, r *http.Request) {
 	// 615: Lumière SDB2 ON
 	// 590: Trigger Scenario
 	// Others: Various system indices
-	indices := []int{613, 607, 615, 590, 349, 350, 351, 352, 363, 425, 426, 920}
+	indices := []int{613, 607, 615, 590, 349, 350, 351, 352, 363, 425, 426, 920, 567}
 
 	// Build response
 	// isconnected: always true (client is connected if it's making this request)
