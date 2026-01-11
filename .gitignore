@@ -26,7 +26,7 @@
 go.work
 
 # Project specific binaries
-server
+/server
 
 # JS
 node_modules/

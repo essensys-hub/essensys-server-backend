@@ -27,8 +27,13 @@ func main() {
 	cfg.LogConfig()
 
 	// Initialize store
-	store := data.NewMemoryStore()
-	log.Println("Initialized in-memory data store")
+	// Initialize store
+	// store := data.NewMemoryStore()
+	
+	// Initialize Redis store
+	// Default to localhost:6379, no password. Ensure Redis is running.
+	store := data.NewRedisStore("localhost:6379", "", 0)
+	log.Println("Initialized Redis data store (localhost:6379)")
 
 	// Initialize services
 	actionService := core.NewActionService(store)
