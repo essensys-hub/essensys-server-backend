@@ -13,9 +13,16 @@ import (
 
 // Config holds all configuration for the server
 type Config struct {
-	Server ServerConfig `yaml:"server"`
-	Auth   AuthConfig   `yaml:"auth"`
+	Server  ServerConfig  `yaml:"server"`
+	Auth    AuthConfig    `yaml:"auth"`
 	Logging LoggingConfig `yaml:"logging"`
+    Redis   RedisConfig   `yaml:"redis"`
+}
+
+type RedisConfig struct {
+    Addr     string `yaml:"addr"`
+    Password string `yaml:"password"`
+    DB       int    `yaml:"db"`
 }
 
 // ServerConfig holds server-specific configuration
@@ -57,6 +64,11 @@ func Load() (*Config, error) {
 			Level:  "info",
 			Format: "text",
 		},
+        Redis: RedisConfig{
+            Addr:     "localhost:6379",
+            Password: "",
+            DB:       0,
+        },
 	}
 
 	// Try to load from config.yaml if it exists
