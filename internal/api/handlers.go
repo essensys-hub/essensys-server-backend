@@ -14,6 +14,7 @@ import (
     "sync"
     "time"
     "fmt"
+    "html/template"
 )
 
 //go:embed debug.html
@@ -274,4 +275,59 @@ func (h *Handler) PostAdminInject(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetDebug(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "text/html; charset=utf-8")
     w.Write(debugHTML)
+}
+// GetTableRef handles GET /table_ref
+// Serves the HTML reference table page (Redis dump)
+func (h *Handler) GetTableRef(w http.ResponseWriter, r *http.Request) {
+	// Get all values from the store (default client)
+	data := h.store.GetFullTable("default")
+
+	// Convert map to slice for display
+	type Item struct {
+		Key   int
+		Value string
+	}
+	items := make([]Item, 0, len(data))
+	for k, v := range data {
+		items = append(items, Item{Key: k, Value: v})
+	}
+
+	// Sort items by Key
+	// We need generic sorting or custom slice type. Since it's simple:
+	// Use sort.Slice in a block or import sort.
+	// We will import sort at the top of file or use a simple bubble sort if import is tricky with replace.
+	// Let's rely on adding sort to imports first or inline bubble sort for simplicity?
+	// Actually, best practice is to add "sort" to imports. I'll do that in a separate step or assume I can't easily edit imports far away.
+	// I'll do a simple inline sort to avoid import hassle on partial file edits, or just add "sort" to the imports block now.
+    // Let's try to add sort to imports in the file view.
+    // Wait, I can't modify imports easily here. I will just use a helper function that does insertion sort or bubble sort since len is small (<1000).
+    
+    // Bubble sort for simplicity (N < 2048 usually)
+    for i := 0; i < len(items)-1; i++ {
+        for j := 0; j < len(items)-i-1; j++ {
+            if items[j].Key > items[j+1].Key {
+                items[j], items[j+1] = items[j+1], items[j]
+            }
+        }
+    }
+
+	// Render template
+	t, err := template.New("table_ref").Parse(TableRefHTML)
+	if err != nil {
+		http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	dataView := struct {
+		Count int
+		Items []Item
+	}{
+		Count: len(items),
+		Items: items,
+	}
+
+	if err := t.Execute(w, dataView); err != nil {
+		log.Printf("Template execution error: %v", err)
+	}
 }

@@ -52,6 +52,19 @@ func (et *ExchangeTable) GetAll(indices []int) []protocol.ExchangeKV {
 		}
 	}
 	return result
+	return result
+}
+
+// GetFull returns the entire map
+func (et *ExchangeTable) GetFull() map[int]string {
+	et.mu.RLock()
+	defer et.mu.RUnlock()
+	
+	result := make(map[int]string)
+	for k, v := range et.values {
+		result[k] = v
+	}
+	return result
 }
 
 // ActionQueue is a thread-safe FIFO queue for actions
@@ -164,6 +177,12 @@ func (ms *MemoryStore) SetValue(clientID string, index int, value string) {
 func (ms *MemoryStore) GetAllValues(clientID string, indices []int) []protocol.ExchangeKV {
 	client := ms.getOrCreateClient(clientID)
 	return client.ExchangeTable.GetAll(indices)
+}
+
+// GetFullTable retrieves all values from the exchange table
+func (ms *MemoryStore) GetFullTable(clientID string) map[int]string {
+	client := ms.getOrCreateClient(clientID)
+	return client.ExchangeTable.GetFull()
 }
 
 // EnqueueAction adds an action to the GLOBAL queue (shared by all clients)

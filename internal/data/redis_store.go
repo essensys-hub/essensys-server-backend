@@ -100,6 +100,21 @@ func (rs *RedisStore) GetAllValues(clientID string, indices []int) []protocol.Ex
 	return result
 }
 
+func (rs *RedisStore) GetFullTable(clientID string) map[int]string {
+	vals, err := rs.client.HGetAll(rs.ctx, rs.getExchangeKey(clientID)).Result()
+	if err != nil {
+		return map[int]string{}
+	}
+
+	result := make(map[int]string)
+	for k, v := range vals {
+		if index, err := strconv.Atoi(k); err == nil {
+			result[index] = v
+		}
+	}
+	return result
+}
+
 // -- Action Queue Operations --
 
 // Note: MemoryStore uses a global queue. We replicate this behavior.
