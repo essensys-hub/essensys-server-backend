@@ -54,6 +54,8 @@ const TableRefHTML = `<!DOCTYPE html>
     <br>
     <h2>Table d'Échange</h2>
     {{ end }}
+    
+    {{ if .Items }}
     <table>
         <thead>
             <tr>
