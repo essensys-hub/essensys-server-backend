@@ -100,7 +100,7 @@ func (aq *ActionQueue) GetAll() []protocol.Action {
 }
 
 // Acknowledge removes an action with the specified GUID from the queue
-func (aq *ActionQueue) Acknowledge(guid string) bool {
+func (aq *ActionQueue) Acknowledge(guid string) (*protocol.Action, bool) {
 	aq.mu.Lock()
 	defer aq.mu.Unlock()
 	
@@ -108,10 +108,10 @@ func (aq *ActionQueue) Acknowledge(guid string) bool {
 		if action.GUID == guid {
 			// Remove the action by slicing
 			aq.actions = append(aq.actions[:i], aq.actions[i+1:]...)
-			return true
+			return &action, true
 		}
 	}
-	return false
+	return nil, false
 }
 
 // ClientData holds all data for a single client
@@ -199,7 +199,7 @@ func (ms *MemoryStore) DequeueActions(clientID string) []protocol.Action {
 }
 
 // AcknowledgeAction removes an action with the specified GUID from the GLOBAL queue
-func (ms *MemoryStore) AcknowledgeAction(clientID string, guid string) bool {
+func (ms *MemoryStore) AcknowledgeAction(clientID string, guid string) (*protocol.Action, bool) {
 	// Use global queue instead of per-client queue
 	return ms.globalActions.Acknowledge(guid)
 }

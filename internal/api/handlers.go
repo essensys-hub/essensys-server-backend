@@ -201,12 +201,21 @@ func (h *Handler) PostDone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Acknowledge the action
-	found := h.store.AcknowledgeAction(clientID, guid)
+	action, found := h.store.AcknowledgeAction(clientID, guid)
 	if !found {
         addDebugLog("Client tried to confirm unknown/expired GUID: %s", guid)
 		http.Error(w, "Action not found", http.StatusNotFound)
 		return
 	}
+    
+    // Sync action values to the store (Reference Table)
+    // This ensures that when an action is done, the server state reflects the change immediately
+    if action != nil {
+        for _, param := range action.Params {
+            h.store.SetValue(clientID, param.K, param.V)
+        }
+        addDebugLog("Synced %d values from confirmed action %s", len(action.Params), guid)
+    }
 
 	// Log acknowledgment (like server.sample.go)
 	log.Printf("[GO] Action acknowledged: %s", guid)

@@ -21,7 +21,7 @@ type Store interface {
 	// Action Queue operations (for legacy IoT client protocol)
 	EnqueueAction(clientID string, action protocol.Action)
 	DequeueActions(clientID string) []protocol.Action
-	AcknowledgeAction(clientID string, guid string) bool
+	AcknowledgeAction(clientID string, guid string) (*protocol.Action, bool)
 
 	// Client management (for legacy IoT client protocol)
 	IsClientConnected(clientID string) bool

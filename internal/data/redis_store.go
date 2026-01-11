@@ -146,7 +146,7 @@ func (rs *RedisStore) DequeueActions(clientID string) []protocol.Action {
 	return actions
 }
 
-func (rs *RedisStore) AcknowledgeAction(clientID string, guid string) bool {
+func (rs *RedisStore) AcknowledgeAction(clientID string, guid string) (*protocol.Action, bool) {
 	// To remove a specific item from a Redis List by value (LREM), we need the exact value (JSON).
 	// Since we don't have the original JSON here, we have to fetch, find, and remove.
 	// WARNING: This is a race condition prone implementation if multiple consumers exist,
@@ -155,7 +155,7 @@ func (rs *RedisStore) AcknowledgeAction(clientID string, guid string) bool {
 	key := rs.getGlobalActionQueueKey()
 	vals, err := rs.client.LRange(rs.ctx, key, 0, -1).Result()
 	if err != nil {
-		return false
+		return nil, false
 	}
 
 	for _, v := range vals {
@@ -164,11 +164,11 @@ func (rs *RedisStore) AcknowledgeAction(clientID string, guid string) bool {
 			if act.GUID == guid {
 				// Found it. Remove 1 occurrence of this exact value.
 				rs.client.LRem(rs.ctx, key, 1, v)
-				return true
+				return &act, true
 			}
 		}
 	}
-	return false
+	return nil, false
 }
 
 // -- Client Management --
