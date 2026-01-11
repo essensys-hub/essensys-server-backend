@@ -14,7 +14,7 @@ type Store interface {
 	// Exchange Table operations (for legacy IoT client protocol)
 	GetValue(clientID string, index int) (string, bool)
 	SetValue(clientID string, index int, value string)
-	SetValue(clientID string, index int, value string)
+
 	GetAllValues(clientID string, indices []int) []protocol.ExchangeKV
 	GetFullTable(clientID string) map[int]string
 
