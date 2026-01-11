@@ -126,13 +126,17 @@ func (rs *RedisStore) EnqueueAction(clientID string, action protocol.Action) {
 		return
 	}
 	// RPUSH to add to the end of the queue
-	rs.client.RPush(rs.ctx, rs.getGlobalActionQueueKey(), string(data))
+	err = rs.client.RPush(rs.ctx, rs.getGlobalActionQueueKey(), string(data)).Err()
+    if err != nil {
+        fmt.Printf("[Redis] Error enqueuing action: %v\n", err)
+    }
 }
 
 func (rs *RedisStore) DequeueActions(clientID string) []protocol.Action {
 	// LRANGE 0 -1 to get all elements without removing
 	vals, err := rs.client.LRange(rs.ctx, rs.getGlobalActionQueueKey(), 0, -1).Result()
 	if err != nil {
+        fmt.Printf("[Redis] Error dequeuing actions: %v\n", err)
 		return []protocol.Action{}
 	}
 
