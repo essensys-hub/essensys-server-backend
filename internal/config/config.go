@@ -17,12 +17,22 @@ type Config struct {
 	Auth    AuthConfig    `yaml:"auth"`
 	Logging LoggingConfig `yaml:"logging"`
     Redis   RedisConfig   `yaml:"redis"`
+    Database DatabaseConfig `yaml:"database"`
 }
 
 type RedisConfig struct {
     Addr     string `yaml:"addr"`
     Password string `yaml:"password"`
     DB       int    `yaml:"db"`
+}
+
+type DatabaseConfig struct {
+    Driver   string `yaml:"driver"`
+    Host     string `yaml:"host"`
+    Port     int    `yaml:"port"`
+    User     string `yaml:"user"`
+    Password string `yaml:"password"`
+    Name     string `yaml:"name"`
 }
 
 // ServerConfig holds server-specific configuration
@@ -68,6 +78,14 @@ func Load() (*Config, error) {
             Addr:     "localhost:6379",
             Password: "",
             DB:       0,
+        },
+        Database: DatabaseConfig{
+            Driver:   "postgres",
+            Host:     "localhost",
+            Port:     5432,
+            User:     "postgres",
+            Password: "password",
+            Name:     "essensys",
         },
 	}
 

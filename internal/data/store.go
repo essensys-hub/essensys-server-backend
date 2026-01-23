@@ -23,9 +23,13 @@ type Store interface {
 	DequeueActions(clientID string) []protocol.Action
 	AcknowledgeAction(clientID string, guid string) (*protocol.Action, bool)
 
-	// Client management (for legacy IoT client protocol)
+	// Client Management (for legacy IoT client protocol)
 	IsClientConnected(clientID string) bool
 	SetClientConnected(clientID string, connected bool)
+
+	// Auth Info Management
+	SetAuthInfo(clientID, ip, auth, version string)
+	GetAuthInfo(clientID string) (ip, auth, version string, found bool)
 }
 
 // DatabaseStoreInterface extends Store with database-specific operations

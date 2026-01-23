@@ -321,9 +321,13 @@ func (ds *DatabaseStore) DequeueActions(clientID string) []protocol.Action {
 }
 
 // AcknowledgeAction removes an action from the queue
-func (ds *DatabaseStore) AcknowledgeAction(clientID string, guid string) bool {
+func (ds *DatabaseStore) AcknowledgeAction(clientID string, guid string) (*protocol.Action, bool) {
 	err := ds.actionRepo.MarkDone(guid)
-	return err == nil
+    if err != nil {
+        return nil, false
+    }
+    // Ideally we should return the action, but for now return nil as it's not strictly used by result
+	return nil, true 
 }
 
 // IsClientConnected checks if a client is connected
@@ -348,5 +352,15 @@ func (ds *DatabaseStore) SetClientConnected(clientID string, connected bool) {
 	// For database store, connection status is derived from state freshness
 	// This method is kept for interface compatibility
 	// The actual connection status is determined by IsClientConnected
+}
+
+// SetAuthInfo stores auth info
+func (ds *DatabaseStore) SetAuthInfo(clientID, ip, auth, version string) {
+	// Not implemented for DatabaseStore yet
+}
+
+// GetAuthInfo retrieves auth info
+func (ds *DatabaseStore) GetAuthInfo(clientID string) (string, string, string, bool) {
+	return "", "", "", false
 }
 

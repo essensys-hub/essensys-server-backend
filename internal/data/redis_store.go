@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 
 	"github.com/go-redis/redis/v8"
@@ -194,4 +195,41 @@ func (rs *RedisStore) SetClientConnected(clientID string, connected bool) {
 	} else {
 		rs.client.Set(rs.ctx, key, "false", 0)
 	}
+}
+
+// -- Auth Info Management --
+
+func (rs *RedisStore) getAuthInfoKey(clientID string) string {
+	if clientID == "" {
+		clientID = "default"
+	}
+	return fmt.Sprintf("essensys:client:%s:authinfo", clientID)
+}
+
+func (rs *RedisStore) SetAuthInfo(clientID, ip, auth, version string) {
+	key := rs.getAuthInfoKey(clientID)
+	rs.client.HSet(rs.ctx, key, map[string]interface{}{
+		"ip":      ip,
+		"auth":    auth,
+		"version": version,
+		"updated": time.Now().Format(time.RFC3339),
+	})
+}
+
+func (rs *RedisStore) GetAuthInfo(clientID string) (string, string, string, bool) {
+	key := rs.getAuthInfoKey(clientID)
+	vals, err := rs.client.HMGet(rs.ctx, key, "ip", "auth", "version").Result()
+	if err != nil {
+		return "", "", "", false
+	}
+	
+	if len(vals) < 3 || vals[0] == nil {
+		return "", "", "", false
+	}
+	
+	ip, _ := vals[0].(string)
+	auth, _ := vals[1].(string)
+	version, _ := vals[2].(string)
+	
+	return ip, auth, version, true
 }

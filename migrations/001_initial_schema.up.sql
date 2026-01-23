@@ -192,3 +192,5 @@ INSERT INTO es_data_index (index_key, is_active) VALUES
 ON CONFLICT (index_key) DO NOTHING;
 
 
+
+

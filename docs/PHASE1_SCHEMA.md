@@ -121,3 +121,5 @@ user := models.User{
 4. **Extensibilité** : Le schéma peut être étendu avec de nouvelles migrations sans affecter les données existantes
 
 
+
+

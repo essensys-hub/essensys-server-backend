@@ -265,3 +265,5 @@ Après migration, tester avec un client legacy pour vérifier que :
 - Code serveur : `internal/middleware/auth.go` (fonction `BasicAuthDB`)
 
 
+
+

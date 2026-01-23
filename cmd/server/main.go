@@ -14,6 +14,9 @@ import (
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
 	"github.com/essensys-hub/essensys-server-backend/internal/server"
+
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -34,18 +37,35 @@ func main() {
 	store := data.NewRedisStore(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.DB)
 	log.Printf("Initialized Redis data store (%s)", cfg.Redis.Addr)
 
+	// Initialize Database (for Archiver)
+	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		cfg.Database.Host, cfg.Database.Port, cfg.Database.User, cfg.Database.Password, cfg.Database.Name)
+	db, err := sqlx.Connect(cfg.Database.Driver, connStr)
+	if err != nil {
+		log.Printf("WARNING: Failed to connect to database: %v. Archiver disabled.", err)
+	} else {
+		log.Println("Connected to database")
+	}
+
 	// Initialize services
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
 	log.Println("Initialized action and status services")
+	
+	// Initialize Archiver
+	if db != nil {
+		archiver := core.NewArchiverService(store, db)
+		archiver.Start(10 * time.Minute)
+		log.Println("Initialized Archiver Service (10m interval)")
+	}
 
 	// Initialize handler
 	handler := api.NewHandler(actionService, statusService, store)
 
 	// Setup router with middleware chain
-	router := api.NewRouter(handler, cfg.Auth.Clients, cfg.Auth.Enabled)
+	router := api.NewRouter(handler, cfg.Auth.Clients, cfg.Auth.Enabled, store)
 	if cfg.Auth.Enabled {
-		log.Println("Configured HTTP router with middleware chain (Recovery → Logging → BasicAuth)")
+		log.Println("Configured HTTP router with middleware chain (Recovery → Logging → CaptureAuth)")
 	} else {
 		log.Println("Configured HTTP router with middleware chain (Recovery → Logging) - Authentication DISABLED")
 	}

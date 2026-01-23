@@ -60,3 +60,5 @@ psql -U user -d essensys -f migrations/001_initial_schema.down.sql
 - Les booléens utilisent le type `BOOLEAN` PostgreSQL
 
 
+
+

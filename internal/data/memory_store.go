@@ -223,5 +223,16 @@ func (ms *MemoryStore) SetClientConnected(clientID string, connected bool) {
 	defer ms.mu.Unlock()
 	
 	client.IsConnected = connected
+	client.IsConnected = connected
 	client.LastSeen = time.Now()
+}
+
+// SetAuthInfo stores auth info 
+func (ms *MemoryStore) SetAuthInfo(clientID, ip, auth, version string) {
+	// Not implemented for MemoryStore as it's legacy
+}
+
+// GetAuthInfo retrieves auth info
+func (ms *MemoryStore) GetAuthInfo(clientID string) (string, string, string, bool) {
+	return "", "", "", false
 }
