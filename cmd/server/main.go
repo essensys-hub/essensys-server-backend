@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/essensys-hub/essensys-server-backend/internal/api"
+	"github.com/essensys-hub/essensys-server-backend/internal/auth"
 	"github.com/essensys-hub/essensys-server-backend/internal/config"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
@@ -62,8 +63,20 @@ func main() {
 	// Initialize handler
 	handler := api.NewHandler(actionService, statusService, store)
 
+    // Initialize SessionStore
+    sessionStore := auth.NewSessionStore()
+
+    // Initialize web handler (if db is connected)
+    var webHandler *api.WebHandler
+    if db != nil {
+        webHandler = api.NewWebHandler(db, sessionStore, actionService, store)
+        log.Println("Initialized Web Handler (Authentication enabled)")
+    } else {
+        log.Println("WARNING: Database not connected. Web Handler (Auth) disabled.")
+    }
+
 	// Setup router with middleware chain
-	router := api.NewRouter(handler, cfg.Auth.Clients, cfg.Auth.Enabled, store)
+	router := api.NewRouter(handler, webHandler, cfg.Auth.Clients, cfg.Auth.Enabled, store)
 	if cfg.Auth.Enabled {
 		log.Println("Configured HTTP router with middleware chain (Recovery → Logging → CaptureAuth)")
 	} else {

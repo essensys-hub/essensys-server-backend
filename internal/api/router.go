@@ -10,7 +10,7 @@ import (
 
 // NewRouter creates and configures the HTTP router with all middleware and routes
 // If authEnabled is false, authentication middleware is skipped
-func NewRouter(handler *Handler, validCredentials map[string]string, authEnabled bool, store data.Store) http.Handler {
+func NewRouter(handler *Handler, webHandler *WebHandler, validCredentials map[string]string, authEnabled bool, store data.Store) http.Handler {
 	// Create separate mux for API routes
 	apiMux := http.NewServeMux()
 	apiMux.HandleFunc("/api/serverinfos", handler.GetServerInfos)
@@ -18,6 +18,16 @@ func NewRouter(handler *Handler, validCredentials map[string]string, authEnabled
 	apiMux.HandleFunc("/api/myactions", handler.GetMyActions)
 	apiMux.HandleFunc("/api/done/", handler.PostDone)           // Trailing slash to match /api/done/{guid}
 	apiMux.HandleFunc("/api/admin/inject", handler.PostAdminInject) // Admin endpoint to inject actions
+
+    // Web Frontend Routes (if webHandler is provided)
+    if webHandler != nil {
+        apiMux.HandleFunc("/api/auth/login", webHandler.Login)
+        apiMux.HandleFunc("/api/auth/logout", webHandler.Logout)
+        apiMux.HandleFunc("/api/auth/register", webHandler.Register)
+        apiMux.HandleFunc("/api/user/me", webHandler.GetCurrentUser)
+        // Alarm & Actions
+        apiMux.HandleFunc("/api/web/actions", webHandler.PostWebActions)
+    }
 
 	// Conditionally apply authentication middleware to API routes
 	var apiHandler http.Handler = apiMux

@@ -7,10 +7,13 @@ import (
 	"net/http"
 
 	"github.com/essensys-hub/essensys-server-backend/internal/auth"
+    "github.com/essensys-hub/essensys-server-backend/internal/core"
+    "github.com/essensys-hub/essensys-server-backend/internal/data"
 	"github.com/essensys-hub/essensys-server-backend/internal/data/database"
 	"github.com/essensys-hub/essensys-server-backend/internal/middleware"
 	"github.com/essensys-hub/essensys-server-backend/internal/models"
 	"github.com/essensys-hub/essensys-server-backend/internal/services"
+    "github.com/essensys-hub/essensys-server-backend/pkg/protocol"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -19,14 +22,18 @@ type WebHandler struct {
 	userService  *services.UserService
 	sessionStore *auth.SessionStore
 	userRepo     *database.UserRepository
+    actionService *core.ActionService
+    store        data.Store
 }
 
 // NewWebHandler creates a new WebHandler instance
-func NewWebHandler(db *sqlx.DB, sessionStore *auth.SessionStore) *WebHandler {
+func NewWebHandler(db *sqlx.DB, sessionStore *auth.SessionStore, actionService *core.ActionService, store data.Store) *WebHandler {
 	return &WebHandler{
 		userService:  services.NewUserService(db),
 		sessionStore: sessionStore,
 		userRepo:     database.NewUserRepository(db),
+        actionService: actionService,
+        store:        store,
 	}
 }
 
