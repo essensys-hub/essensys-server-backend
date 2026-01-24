@@ -496,6 +496,92 @@ func formatActivationCode(code string) string {
 	return formatted
 }
 
+// PostWebActions handles POST /api/web/actions
+// This endpoint receives actions from the modern web frontend
+// It performs logic (splitting alarm code, queuing actions) before sending to the board
+func (h *WebHandler) PostWebActions(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPost {
+        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        return
+    }
+
+    // Get user ID from context
+    userID, ok := middleware.GetUserID(r)
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    // Get user to find machine ID (or client ID)
+    user, err := h.userRepo.GetByID(userID)
+    if err != nil {
+        http.Error(w, "User not found", http.StatusNotFound)
+        return
+    }
+    
+    // Use "default" as Safe Default for now.
+    clientID := "default"
+    _ = user // suppress unused check if we don't use it for clientID right now
+
+    // Parse request body
+    body, err := io.ReadAll(r.Body)
+    if err != nil {
+        http.Error(w, "Failed to read request body", http.StatusBadRequest)
+        return
+    }
+    defer r.Body.Close()
+
+    var req struct {
+        Alarme     string `json:"alarme"`     // "on" or "off"
+        CodeAlarme string `json:"codealarme"` // 4 digit code
+    }
+
+    if err := json.Unmarshal(body, &req); err != nil {
+        http.Error(w, "Invalid JSON", http.StatusBadRequest)
+        return
+    }
+
+    // Process Alarm Action
+    if req.Alarme != "" && req.CodeAlarme != "" && len(req.CodeAlarme) == 4 {
+        log.Printf("[WEB] Received Alarm Action: %s with code %s", req.Alarme, req.CodeAlarme)
+
+        // Split Code into LSB (1st & 2nd digits) and MSB (3rd & 4th digits)
+        lsb := req.CodeAlarme[0:2]
+        msb := req.CodeAlarme[2:4]
+
+        // Command value: "1" for ON, "0" for OFF
+        cmd := "0"
+        if req.Alarme == "on" {
+            cmd = "1"
+        }
+
+        params := []protocol.ExchangeKV{
+            {K: 409, V: cmd},
+            {K: 410, V: lsb},
+            {K: 411, V: msb},
+            // Reset Authorization status to 0 (Pending)
+            {K: 307, V: "0"}, 
+        }
+
+        guid, err := h.actionService.AddAction(clientID, params)
+        if err != nil {
+            http.Error(w, "Failed to queue action", http.StatusInternalServerError)
+            return
+        }
+        
+        log.Printf("[WEB] Queued Alarm Action GUID: %s", guid)
+    }
+
+    response := map[string]string{
+        "status": "ok",
+        "message": "Action sent to queue",
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(response)
+}
+
 
 
 
