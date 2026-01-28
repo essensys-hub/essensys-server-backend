@@ -606,8 +606,20 @@ func (h *WebHandler) GetHistoryLatest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if user has a machine assigned
+	if user.MachineID == nil {
+		response := map[string]interface{}{
+			"lastAction": nil,
+			"message":    "No machine assigned to user",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Use query param machineId or default to user's machine
-	machineID := user.MachineID
+	machineID := *user.MachineID
 	if qMachineID := r.URL.Query().Get("machineId"); qMachineID != "" {
 		// For now, only allow users to query their own machine
 		// In the future, could add admin check for querying other machines
