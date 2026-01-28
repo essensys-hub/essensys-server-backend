@@ -19,21 +19,23 @@ import (
 
 // WebHandler contains HTTP request handlers for web endpoints (React frontend)
 type WebHandler struct {
-	userService  *services.UserService
-	sessionStore *auth.SessionStore
-	userRepo     *database.UserRepository
-    actionService *core.ActionService
-    store        data.Store
+	userService   *services.UserService
+	sessionStore  *auth.SessionStore
+	userRepo      *database.UserRepository
+	actionRepo    *database.ActionRepository
+	actionService *core.ActionService
+	store         data.Store
 }
 
 // NewWebHandler creates a new WebHandler instance
 func NewWebHandler(db *sqlx.DB, sessionStore *auth.SessionStore, actionService *core.ActionService, store data.Store) *WebHandler {
 	return &WebHandler{
-		userService:  services.NewUserService(db),
-		sessionStore: sessionStore,
-		userRepo:     database.NewUserRepository(db),
-        actionService: actionService,
-        store:        store,
+		userService:   services.NewUserService(db),
+		sessionStore:  sessionStore,
+		userRepo:      database.NewUserRepository(db),
+		actionRepo:    database.NewActionRepository(db),
+		actionService: actionService,
+		store:         store,
 	}
 }
 
@@ -582,6 +584,78 @@ func (h *WebHandler) PostWebActions(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(response)
 }
 
+// GetHistoryLatest handles GET /api/web/history/latest
+// Returns the last action sent for a given machine ID
+// Query params: machineId (optional, defaults to user's machine)
+func (h *WebHandler) GetHistoryLatest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
+	// Get user to find their machine ID
+	userID, ok := middleware.GetUserID(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
+	user, err := h.userRepo.GetByID(userID)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
 
+	// Use query param machineId or default to user's machine
+	machineID := user.MachineID
+	if qMachineID := r.URL.Query().Get("machineId"); qMachineID != "" {
+		// For now, only allow users to query their own machine
+		// In the future, could add admin check for querying other machines
+		log.Printf("[HISTORY] Query param machineId=%s (ignored, using user's machine %d)", qMachineID, machineID)
+	}
+
+	// Get last action for this machine
+	action, err := h.actionRepo.GetLastActionByMachineID(machineID)
+	if err != nil {
+		log.Printf("[HISTORY] Error getting last action for machine %d: %v", machineID, err)
+		http.Error(w, "Failed to get history", http.StatusInternalServerError)
+		return
+	}
+
+	if action == nil {
+		// No action found
+		response := map[string]interface{}{
+			"lastAction": nil,
+			"message":    "No action history found",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Get action indexes to provide more detail
+	indexes, err := h.actionRepo.GetIndexesByActionID(action.ID)
+	if err != nil {
+		log.Printf("[HISTORY] Error getting indexes for action %d: %v", action.ID, err)
+	}
+
+	// Build response
+	response := map[string]interface{}{
+		"lastAction": map[string]interface{}{
+			"id":           action.ID,
+			"guid":         action.Guid,
+			"machineId":    action.MachineID,
+			"actionType":   action.ActionType,
+			"actionInfo":   action.ActionInfo,
+			"isDone":       action.IsDone,
+			"timestamp":    action.DateCreation,
+			"indexes":      indexes,
+		},
+		"message": "État non garanti (boucle ouverte)",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}

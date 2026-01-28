@@ -27,6 +27,8 @@ func NewRouter(handler *Handler, webHandler *WebHandler, validCredentials map[st
         apiMux.HandleFunc("/api/user/me", webHandler.GetCurrentUser)
         // Alarm & Actions
         apiMux.HandleFunc("/api/web/actions", webHandler.PostWebActions)
+        // History - returns the last action sent for a device
+        apiMux.HandleFunc("/api/web/history/latest", webHandler.GetHistoryLatest)
     }
 
 	// Conditionally apply authentication middleware to API routes

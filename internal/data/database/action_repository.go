@@ -134,6 +134,36 @@ func (r *ActionRepository) GetByMachineIDAndDateRange(machineID int, start, end 
 	return actions, nil
 }
 
+// GetLastActionByMachineID retrieves the most recent action for a machine
+func (r *ActionRepository) GetLastActionByMachineID(machineID int) (*models.Action, error) {
+	var action models.Action
+	query := `SELECT * FROM es_action 
+		WHERE machine_id = $1 
+		ORDER BY date_creation DESC 
+		LIMIT 1`
+	err := r.db.Get(&action, query, machineID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &action, nil
+}
+
+// GetLastActions retrieves the most recent action for each unique machine
+func (r *ActionRepository) GetLastActions() ([]*models.Action, error) {
+	var actions []*models.Action
+	query := `SELECT DISTINCT ON (machine_id) * 
+		FROM es_action 
+		ORDER BY machine_id, date_creation DESC`
+	err := r.db.Select(&actions, query)
+	if err != nil {
+		return nil, err
+	}
+	return actions, nil
+}
+
 
 
 
