@@ -2,7 +2,6 @@ package mqtt
 
 import (
 	"log"
-	"strconv"
 	"strings"
 
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
