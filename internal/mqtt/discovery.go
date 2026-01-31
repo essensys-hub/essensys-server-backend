@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
-
-	"github.com/essensys-hub/essensys-server-backend/internal/mqtt/handlers"
 )
 
 // TableReferenceEntry represents an entry in table_reference.json
