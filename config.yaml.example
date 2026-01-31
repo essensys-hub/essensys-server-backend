@@ -28,3 +28,17 @@ logging:
   
   # Log format: text or json
   format: text
+
+mqtt:
+  # Enable/disable MQTT integration (disabled by default)
+  enabled: false
+  
+  # MQTT broker address
+  broker: "tcp://localhost:1883"
+  
+  # MQTT authentication
+  username: "essensys"
+  password: "essensys_mqtt_password"
+  
+  # MQTT client ID
+  client_id: "essensys-backend"

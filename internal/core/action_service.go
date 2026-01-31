@@ -18,16 +18,45 @@ func generateGUID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
+// MQTTPublisher is an interface for publishing MQTT states
+type MQTTPublisher interface {
+	PublishActionState(params []struct {
+		K int
+		V string
+	}, entityMapping map[int]struct {
+		EntityType string
+		EntityID   string
+	})
+}
+
 // ActionService handles action processing logic
 type ActionService struct {
-	store data.Store
+	store        data.Store
+	mqttPublisher MQTTPublisher
+	entityMapping map[int]struct {
+		EntityType string
+		EntityID   string
+	}
 }
 
 // NewActionService creates a new ActionService instance
 func NewActionService(store data.Store) *ActionService {
 	return &ActionService{
-		store: store,
+		store:         store,
+		entityMapping: make(map[int]struct {
+			EntityType string
+			EntityID   string
+		}),
 	}
+}
+
+// SetMQTTPublisher sets the MQTT publisher for state updates
+func (s *ActionService) SetMQTTPublisher(publisher MQTTPublisher, entityMapping map[int]struct {
+	EntityType string
+	EntityID   string
+}) {
+	s.mqttPublisher = publisher
+	s.entityMapping = entityMapping
 }
 
 // AddAction adds an action to the queue with proper processing
@@ -44,6 +73,22 @@ func (s *ActionService) AddAction(clientID string, params []protocol.ExchangeKV)
 
 	// Enqueue the action
 	s.store.EnqueueAction(clientID, action)
+
+	// Publish state to MQTT if publisher is available
+	if s.mqttPublisher != nil && len(s.entityMapping) > 0 {
+		// Convert params to format expected by MQTT publisher
+		mqttParams := make([]struct {
+			K int
+			V string
+		}, len(processedParams))
+		for i, p := range processedParams {
+			mqttParams[i] = struct {
+				K int
+				V string
+			}{K: p.K, V: p.V}
+		}
+		s.mqttPublisher.PublishActionState(mqttParams, s.entityMapping)
+	}
 
 	return action.GUID, nil
 }

@@ -18,6 +18,7 @@ type Config struct {
 	Logging LoggingConfig `yaml:"logging"`
     Redis   RedisConfig   `yaml:"redis"`
     Database DatabaseConfig `yaml:"database"`
+    MQTT    MQTTConfig    `yaml:"mqtt"`
 }
 
 type RedisConfig struct {
@@ -33,6 +34,14 @@ type DatabaseConfig struct {
     User     string `yaml:"user"`
     Password string `yaml:"password"`
     Name     string `yaml:"name"`
+}
+
+type MQTTConfig struct {
+    Enabled  bool   `yaml:"enabled"`
+    Broker   string `yaml:"broker"`
+    Username string `yaml:"username"`
+    Password string `yaml:"password"`
+    ClientID string `yaml:"client_id"`
 }
 
 // ServerConfig holds server-specific configuration
@@ -86,6 +95,13 @@ func Load() (*Config, error) {
             User:     "postgres",
             Password: "password",
             Name:     "essensys",
+        },
+        MQTT: MQTTConfig{
+            Enabled:  false,
+            Broker:   "tcp://localhost:1883",
+            Username: "essensys",
+            Password: "",
+            ClientID: "essensys-backend",
         },
 	}
 

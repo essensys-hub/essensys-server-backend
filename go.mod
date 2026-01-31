@@ -3,6 +3,7 @@ module github.com/essensys-hub/essensys-server-backend
 go 1.19
 
 require (
+	github.com/eclipse/paho.mqtt.golang v1.4.3
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
 	github.com/jmoiron/sqlx v1.4.0

@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/essensys-hub/essensys-server-backend/internal/config"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
+	"github.com/essensys-hub/essensys-server-backend/internal/mqtt"
 	"github.com/essensys-hub/essensys-server-backend/internal/server"
 
 	"github.com/jmoiron/sqlx"
@@ -52,6 +54,50 @@ func main() {
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
 	log.Println("Initialized action and status services")
+	
+	// Initialize MQTT client (if enabled)
+	var mqttClient *mqtt.Client
+	if cfg.MQTT.Enabled {
+		mqttClient = mqtt.NewClient(cfg.MQTT)
+		if err := mqttClient.Connect(); err != nil {
+			log.Printf("WARNING: MQTT connection failed: %v. MQTT features disabled.", err)
+			mqttClient = nil
+		} else {
+			log.Println("Connected to MQTT broker")
+			
+			// Publish MQTT Discovery configs
+			if err := mqttClient.PublishDiscoveryConfigs(); err != nil {
+				log.Printf("WARNING: Failed to publish MQTT Discovery configs: %v", err)
+			}
+			
+			// Subscribe to command topics
+			entityMapping := mqttClient.GetEntityMapping()
+			commandHandler := mqtt.NewCommandHandler(actionService, entityMapping)
+			if err := mqttClient.SubscribeToCommands(commandHandler); err != nil {
+				log.Printf("WARNING: Failed to subscribe to MQTT command topics: %v", err)
+			}
+			
+			// Set up entity mapping for ActionService to publish states
+			// Build reverse mapping: index -> entity info
+			indexToEntity := make(map[int]struct {
+				EntityType string
+				EntityID   string
+			})
+			for key, cmd := range entityMapping {
+				parts := strings.Split(key, "/")
+				if len(parts) == 2 {
+					indexToEntity[cmd.Index] = struct {
+						EntityType string
+						EntityID   string
+					}{
+						EntityType: parts[0],
+						EntityID:   parts[1],
+					}
+				}
+			}
+			actionService.SetMQTTPublisher(mqttClient, indexToEntity)
+		}
+	}
 	
 	// Initialize Archiver
 	if db != nil {
@@ -132,6 +178,11 @@ func main() {
 		// Close the listener to stop accepting new connections
 		if err := listener.Close(); err != nil {
 			log.Printf("Error closing listener: %v", err)
+		}
+
+		// Disconnect MQTT client
+		if mqttClient != nil {
+			mqttClient.Disconnect()
 		}
 
 		// Give existing connections time to finish
