@@ -324,17 +324,21 @@ func (c *Client) GetCameras() ([]Camera, error) {
 			lastSeen = time.Now() // Use current time as fallback
 		}
 
+		// Use modelKey as fallback for Type/Model if not provided
+		cameraType := camData.Type
+		if cameraType == "" {
+			cameraType = camData.ModelKey
+		}
+		model := camData.Model
+		if model == "" {
+			model = camData.ModelKey
+		}
+
 		camera := Camera{
 			ID:          camData.ID,
 			Name:        camData.Name,
-			Type:        camData.Type
-			if camData.Type == "" {
-				camera.Type = camData.ModelKey // Use modelKey as fallback
-			}
-			Model:       camData.Model
-			if camData.Model == "" {
-				camera.Model = camData.ModelKey // Use modelKey as fallback
-			}
+			Type:        cameraType,
+			Model:       model,
 			Status:      status,
 			LastSeen:    lastSeen,
 			IsRecording: camData.IsRecording,
