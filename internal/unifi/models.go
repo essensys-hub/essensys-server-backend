@@ -17,8 +17,19 @@ type Camera struct {
 }
 
 // BootstrapResponse represents the UniFi Protect bootstrap API response
+// The structure may vary depending on the endpoint used
 type BootstrapResponse struct {
 	Cameras []CameraData `json:"cameras"`
+	// Some endpoints return model info instead
+	Model struct {
+		ID        string `json:"id"`
+		ShortName string `json:"shortName"`
+		LongName  string `json:"longName"`
+	} `json:"model,omitempty"`
+	Images []struct {
+		Size int    `json:"size"`
+		URL  string `json:"url"`
+	} `json:"images,omitempty"`
 }
 
 // CameraData represents camera data from bootstrap API

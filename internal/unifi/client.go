@@ -50,6 +50,8 @@ func NewClient(cfg config.UniFiConfig) *Client {
 }
 
 // authenticate performs authentication to get a session token
+// Note: /api/bootstrap works directly with X-API-KEY header, so authentication
+// may not be needed. This method is kept for compatibility with endpoints that require session.
 func (c *Client) authenticate() error {
 	if c.authenticated {
 		return nil
@@ -59,30 +61,26 @@ func (c *Client) authenticate() error {
 		return fmt.Errorf("UniFi Protect is disabled")
 	}
 
-	// Try API key authentication first (if username/password not provided)
-	if c.config.APIKey != "" && c.config.Username == "" {
-		// Some UniFi versions accept API key directly in auth endpoint
-		authURL := fmt.Sprintf("%s/api/auth/login", c.config.BaseURL)
-		authData := map[string]string{
-			"apiKey": c.config.APIKey,
-		}
-		jsonData, _ := json.Marshal(authData)
-		
-		req, _ := http.NewRequest("POST", authURL, bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
+	// If API key is provided, try to use it directly (no session auth needed for /api/bootstrap)
+	if c.config.APIKey != "" {
+		// Test if API key works by trying /api/bootstrap
+		testURL := fmt.Sprintf("%s/api/bootstrap", c.config.BaseURL)
+		req, _ := http.NewRequest("GET", testURL, nil)
+		req.Header.Set("X-API-Key", c.config.APIKey)
+		req.Header.Set("Accept", "application/json")
 		
 		resp, err := c.httpClient.Do(req)
-		if err == nil && resp.StatusCode == http.StatusOK {
-			c.authenticated = true
-			resp.Body.Close()
-			return nil
-		}
-		if resp != nil {
-			resp.Body.Close()
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				// API key works directly, no session needed
+				c.authenticated = true
+				return nil
+			}
 		}
 	}
 
-	// Fallback to username/password if API key alone doesn't work
+	// Fallback to username/password session auth if API key alone doesn't work
 	if c.config.Username != "" && c.config.Password != "" {
 		authURL := fmt.Sprintf("%s/api/auth/login", c.config.BaseURL)
 		authData := map[string]string{
@@ -104,6 +102,12 @@ func (c *Client) authenticate() error {
 			resp.Body.Close()
 		}
 		return fmt.Errorf("authentication failed: %d", resp.StatusCode)
+	}
+
+	// If only API key is configured, assume it works (will be validated on first request)
+	if c.config.APIKey != "" {
+		c.authenticated = true
+		return nil
 	}
 
 	return fmt.Errorf("no authentication method configured")
@@ -128,9 +132,11 @@ func (c *Client) GetBootstrap() (*BootstrapResponse, error) {
 		return nil, fmt.Errorf("authentication required: %w", err)
 	}
 
-	// Try different endpoints
+	// Try different endpoints (start with /api/cameras which should work with X-API-KEY)
+	// Note: /api/bootstrap returns model info, not cameras list
 	endpoints := []string{
-		"/api/bootstrap",
+		"/api/cameras",  // Try cameras endpoint directly
+		"/api/bootstrap",  // Fallback: bootstrap might have cameras in different structure
 		"/unifi-api/protect/api/bootstrap",
 		"/proxy/protect/api/bootstrap",
 	}
@@ -169,12 +175,43 @@ func (c *Client) GetBootstrap() (*BootstrapResponse, error) {
 				resp.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			}
 
-			var bootstrap BootstrapResponse
-			if err := json.NewDecoder(resp.Body).Decode(&bootstrap); err != nil {
+			// Read response body to check structure
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
 				lastErr = err
 				continue
 			}
-			return &bootstrap, nil
+
+			// Try to decode as BootstrapResponse (with cameras array)
+			var bootstrap BootstrapResponse
+			if err := json.Unmarshal(bodyBytes, &bootstrap); err != nil {
+				lastErr = fmt.Errorf("failed to decode JSON: %w", err)
+				continue
+			}
+
+			// Check if response has cameras array
+			if len(bootstrap.Cameras) > 0 {
+				return &bootstrap, nil
+			}
+
+			// If endpoint is /api/cameras, try to decode as direct cameras array
+			if endpoint == "/api/cameras" {
+				var camerasArray []CameraData
+				if err := json.Unmarshal(bodyBytes, &camerasArray); err == nil && len(camerasArray) > 0 {
+					bootstrap.Cameras = camerasArray
+					return &bootstrap, nil
+				}
+			}
+
+			// If we got model info but no cameras, this is the wrong endpoint
+			if bootstrap.Model.ID != "" {
+				lastErr = fmt.Errorf("endpoint %s returned model info but no cameras", endpoint)
+				continue
+			}
+
+			// Empty cameras array, try next endpoint
+			lastErr = fmt.Errorf("endpoint %s returned empty cameras array", endpoint)
+			continue
 		}
 
 		if resp.StatusCode == http.StatusUnauthorized {
@@ -193,29 +230,6 @@ func (c *Client) GetBootstrap() (*BootstrapResponse, error) {
 	return nil, fmt.Errorf("all endpoints failed: %w", lastErr)
 }
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get bootstrap: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("authentication failed: invalid API key")
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to get bootstrap: %d - %s", resp.StatusCode, string(body))
-	}
-
-	var bootstrap BootstrapResponse
-	if err := json.NewDecoder(resp.Body).Decode(&bootstrap); err != nil {
-		return nil, fmt.Errorf("failed to decode bootstrap response: %w", err)
-	}
-
-	return &bootstrap, nil
-}
-
 // GetCameraSnapshot retrieves a snapshot image for a camera
 func (c *Client) GetCameraSnapshot(cameraID string) ([]byte, error) {
 	if !c.config.Enabled {
@@ -227,9 +241,9 @@ func (c *Client) GetCameraSnapshot(cameraID string) ([]byte, error) {
 		return nil, fmt.Errorf("authentication required: %w", err)
 	}
 
-	// Try different snapshot endpoints
+	// Try different snapshot endpoints (start with /api/cameras which works with X-API-KEY)
 	endpoints := []string{
-		fmt.Sprintf("/api/cameras/%s/snapshot", cameraID),
+		fmt.Sprintf("/api/cameras/%s/snapshot", cameraID),  // This endpoint works with X-API-KEY header
 		fmt.Sprintf("/unifi-api/protect/api/cameras/%s/snapshot", cameraID),
 		fmt.Sprintf("/proxy/protect/api/cameras/%s/snapshot", cameraID),
 	}
