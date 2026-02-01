@@ -42,3 +42,15 @@ mqtt:
   
   # MQTT client ID
   client_id: "essensys-backend"
+
+unifi:
+  # Enable/disable UniFi Protect integration (disabled by default)
+  enabled: false
+  
+  # UniFi Protect base URL (UDM Pro IP address)
+  base_url: "https://192.168.0.1"
+  
+  # UniFi Protect API key (avoids MFA requirement)
+  # Generate API key from UniFi Protect web interface:
+  # Settings > Users > [Your User] > API Access > Generate API Key
+  api_key: "your_unifi_api_key_here"

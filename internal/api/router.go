@@ -10,7 +10,7 @@ import (
 
 // NewRouter creates and configures the HTTP router with all middleware and routes
 // If authEnabled is false, authentication middleware is skipped
-func NewRouter(handler *Handler, webHandler *WebHandler, validCredentials map[string]string, authEnabled bool, store data.Store) http.Handler {
+func NewRouter(handler *Handler, webHandler *WebHandler, unifiHandler *UniFiHandler, validCredentials map[string]string, authEnabled bool, store data.Store) http.Handler {
 	// Create separate mux for API routes
 	apiMux := http.NewServeMux()
 	apiMux.HandleFunc("/api/serverinfos", handler.GetServerInfos)
@@ -29,6 +29,12 @@ func NewRouter(handler *Handler, webHandler *WebHandler, validCredentials map[st
         apiMux.HandleFunc("/api/web/actions", webHandler.PostWebActions)
         // History - returns the last action sent for a device
         apiMux.HandleFunc("/api/web/history/latest", webHandler.GetHistoryLatest)
+    }
+
+    // UniFi Protect Routes (if unifiHandler is provided)
+    if unifiHandler != nil {
+        apiMux.HandleFunc("/api/unifi/cameras", unifiHandler.GetCameras)
+        apiMux.HandleFunc("/api/unifi/cameras/", unifiHandler.GetCameraSnapshot) // Trailing slash for path matching
     }
 
 	// Conditionally apply authentication middleware to API routes

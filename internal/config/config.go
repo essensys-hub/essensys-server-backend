@@ -19,6 +19,7 @@ type Config struct {
     Redis   RedisConfig   `yaml:"redis"`
     Database DatabaseConfig `yaml:"database"`
     MQTT    MQTTConfig    `yaml:"mqtt"`
+    UniFi   UniFiConfig   `yaml:"unifi"`
 }
 
 type RedisConfig struct {
@@ -42,6 +43,12 @@ type MQTTConfig struct {
     Username string `yaml:"username"`
     Password string `yaml:"password"`
     ClientID string `yaml:"client_id"`
+}
+
+type UniFiConfig struct {
+    Enabled bool   `yaml:"enabled"`
+    BaseURL string `yaml:"base_url"` // e.g., "https://192.168.0.1"
+    APIKey  string `yaml:"api_key"`  // API key instead of username/password (avoids MFA)
 }
 
 // ServerConfig holds server-specific configuration
@@ -102,6 +109,11 @@ func Load() (*Config, error) {
             Username: "essensys",
             Password: "",
             ClientID: "essensys-backend",
+        },
+        UniFi: UniFiConfig{
+            Enabled: false,
+            BaseURL: "https://192.168.0.1",
+            APIKey:  "",
         },
 	}
 

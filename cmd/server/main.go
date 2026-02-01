@@ -17,6 +17,7 @@ import (
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
 	"github.com/essensys-hub/essensys-server-backend/internal/mqtt"
 	"github.com/essensys-hub/essensys-server-backend/internal/server"
+	"github.com/essensys-hub/essensys-server-backend/internal/unifi"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -121,8 +122,21 @@ func main() {
         log.Println("WARNING: Database not connected. Web Handler (Auth) disabled.")
     }
 
+	// Initialize UniFi Protect client (if enabled)
+	var unifiHandler *api.UniFiHandler
+	if cfg.UniFi.Enabled {
+		if cfg.UniFi.APIKey == "" {
+			log.Printf("WARNING: UniFi Protect enabled but API key not configured. UniFi features disabled.")
+			unifiHandler = nil
+		} else {
+			unifiClient := unifi.NewClient(cfg.UniFi)
+			unifiHandler = api.NewUniFiHandler(unifiClient)
+			log.Println("Initialized UniFi Protect Handler (using API key)")
+		}
+	}
+
 	// Setup router with middleware chain
-	router := api.NewRouter(handler, webHandler, cfg.Auth.Clients, cfg.Auth.Enabled, store)
+	router := api.NewRouter(handler, webHandler, unifiHandler, cfg.Auth.Clients, cfg.Auth.Enabled, store)
 	if cfg.Auth.Enabled {
 		log.Println("Configured HTTP router with middleware chain (Recovery → Logging → CaptureAuth)")
 	} else {
