@@ -46,9 +46,11 @@ type MQTTConfig struct {
 }
 
 type UniFiConfig struct {
-    Enabled bool   `yaml:"enabled"`
-    BaseURL string `yaml:"base_url"` // e.g., "https://192.168.0.1"
-    APIKey  string `yaml:"api_key"`  // API key instead of username/password (avoids MFA)
+    Enabled  bool   `yaml:"enabled"`
+    BaseURL  string `yaml:"base_url"` // e.g., "https://192.168.0.1"
+    APIKey   string `yaml:"api_key"`  // API key for authentication
+    Username string `yaml:"username"` // Optional: username for session auth (if API key alone doesn't work)
+    Password string `yaml:"password"` // Optional: password for session auth (if API key alone doesn't work)
 }
 
 // ServerConfig holds server-specific configuration
@@ -111,9 +113,11 @@ func Load() (*Config, error) {
             ClientID: "essensys-backend",
         },
         UniFi: UniFiConfig{
-            Enabled: false,
-            BaseURL: "https://192.168.0.1",
-            APIKey:  "",
+            Enabled:  false,
+            BaseURL:  "https://192.168.0.1",
+            APIKey:   "",
+            Username: "",
+            Password: "",
         },
 	}
 
