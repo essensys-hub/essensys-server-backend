@@ -132,13 +132,12 @@ func (c *Client) GetBootstrap() (*BootstrapResponse, error) {
 		return nil, fmt.Errorf("authentication required: %w", err)
 	}
 
-	// Try different endpoints (start with /api/cameras which should work with X-API-KEY)
-	// Note: /api/bootstrap returns model info, not cameras list
+	// Try different endpoints (start with /proxy/protect/integration/v1/cameras from API docs)
 	endpoints := []string{
-		"/api/cameras",  // Try cameras endpoint directly
-		"/api/bootstrap",  // Fallback: bootstrap might have cameras in different structure
+		"/proxy/protect/integration/v1/cameras",  // Official API endpoint from docs
+		"/api/cameras",  // Fallback: direct cameras endpoint
+		"/api/bootstrap",  // Fallback: bootstrap might have cameras
 		"/unifi-api/protect/api/bootstrap",
-		"/proxy/protect/api/bootstrap",
 	}
 
 	var lastErr error
@@ -189,13 +188,14 @@ func (c *Client) GetBootstrap() (*BootstrapResponse, error) {
 				continue
 			}
 
-			// Check if response has cameras array
+			// Check if response has cameras array (BootstrapResponse format)
 			if len(bootstrap.Cameras) > 0 {
 				return &bootstrap, nil
 			}
 
-			// If endpoint is /api/cameras, try to decode as direct cameras array
-			if endpoint == "/api/cameras" {
+			// If endpoint is /proxy/protect/integration/v1/cameras or /api/cameras,
+			// try to decode as direct cameras array
+			if endpoint == "/proxy/protect/integration/v1/cameras" || endpoint == "/api/cameras" {
 				var camerasArray []CameraData
 				if err := json.Unmarshal(bodyBytes, &camerasArray); err == nil && len(camerasArray) > 0 {
 					bootstrap.Cameras = camerasArray
@@ -241,9 +241,10 @@ func (c *Client) GetCameraSnapshot(cameraID string) ([]byte, error) {
 		return nil, fmt.Errorf("authentication required: %w", err)
 	}
 
-	// Try different snapshot endpoints (start with /api/cameras which works with X-API-KEY)
+	// Try different snapshot endpoints (start with /proxy/protect/integration/v1/cameras from API docs)
 	endpoints := []string{
-		fmt.Sprintf("/api/cameras/%s/snapshot", cameraID),  // This endpoint works with X-API-KEY header
+		fmt.Sprintf("/proxy/protect/integration/v1/cameras/%s/snapshot", cameraID),  // Official API endpoint from docs
+		fmt.Sprintf("/api/cameras/%s/snapshot", cameraID),  // Fallback: direct cameras endpoint
 		fmt.Sprintf("/unifi-api/protect/api/cameras/%s/snapshot", cameraID),
 		fmt.Sprintf("/proxy/protect/api/cameras/%s/snapshot", cameraID),
 	}
