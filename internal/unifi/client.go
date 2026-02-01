@@ -38,10 +38,9 @@ func NewClient(cfg config.UniFiConfig) *Client {
 // addAuthHeaders adds authentication headers to the request using API key
 func (c *Client) addAuthHeaders(req *http.Request) {
 	if c.config.APIKey != "" {
-		// Use API key in Authorization header
-		req.Header.Set("Authorization", "Bearer "+c.config.APIKey)
-		// Also set X-API-Key header as some UniFi versions use it
+		// UniFi Protect API uses X-API-Key header (not Authorization Bearer)
 		req.Header.Set("X-API-Key", c.config.APIKey)
+		req.Header.Set("Accept", "application/json")
 	}
 }
 
@@ -55,15 +54,14 @@ func (c *Client) GetBootstrap() (*BootstrapResponse, error) {
 		return nil, fmt.Errorf("UniFi Protect API key is not configured")
 	}
 
-	// Use /unifi-api/protect endpoint instead of /protect/api
-	bootstrapURL := fmt.Sprintf("%s/unifi-api/protect/bootstrap", c.config.BaseURL)
+	// Use /unifi-api/protect/api/bootstrap endpoint for UniFi Protect API
+	bootstrapURL := fmt.Sprintf("%s/unifi-api/protect/api/bootstrap", c.config.BaseURL)
 	req, err := http.NewRequest("GET", bootstrapURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bootstrap request: %w", err)
 	}
 
 	c.addAuthHeaders(req)
-	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -98,8 +96,8 @@ func (c *Client) GetCameraSnapshot(cameraID string) ([]byte, error) {
 		return nil, fmt.Errorf("UniFi Protect API key is not configured")
 	}
 
-	// Use /unifi-api/protect endpoint for snapshots
-	snapshotURL := fmt.Sprintf("%s/unifi-api/protect/cameras/%s/snapshot", c.config.BaseURL, cameraID)
+	// Use /unifi-api/protect/api/cameras/{id}/snapshot endpoint for snapshots
+	snapshotURL := fmt.Sprintf("%s/unifi-api/protect/api/cameras/%s/snapshot", c.config.BaseURL, cameraID)
 	req, err := http.NewRequest("GET", snapshotURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create snapshot request: %w", err)
