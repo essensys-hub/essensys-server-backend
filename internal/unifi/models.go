@@ -32,17 +32,21 @@ type BootstrapResponse struct {
 	} `json:"images,omitempty"`
 }
 
-// CameraData represents camera data from bootstrap API
+// CameraData represents camera data from UniFi Protect API
+// Structure matches /proxy/protect/integration/v1/cameras response
 type CameraData struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Model       string `json:"model"`
-	State       string `json:"state"`
-	LastSeen    int64  `json:"lastSeen"`
-	IsRecording bool   `json:"isRecording"`
-	IsConnected bool   `json:"isConnected"`
+	ModelKey    string `json:"modelKey"` // e.g., "camera"
+	State       string `json:"state"`    // e.g., "CONNECTED", "DISCONNECTED"
 	Mac         string `json:"mac"`
-	Firmware    string `json:"firmwareVersion"`
+	IsMicEnabled bool  `json:"isMicEnabled"`
+	// Optional fields that may be present in bootstrap responses
+	Type        string `json:"type,omitempty"`
+	Model       string `json:"model,omitempty"`
+	LastSeen    int64  `json:"lastSeen,omitempty"`
+	IsRecording bool   `json:"isRecording,omitempty"`
+	IsConnected bool   `json:"isConnected,omitempty"`
+	Firmware    string `json:"firmwareVersion,omitempty"`
 }
 

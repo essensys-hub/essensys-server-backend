@@ -305,15 +305,40 @@ func (c *Client) GetCameras() ([]Camera, error) {
 
 	cameras := make([]Camera, 0, len(bootstrap.Cameras))
 	for _, camData := range bootstrap.Cameras {
+		// Map State to Status (CONNECTED -> online, DISCONNECTED -> offline)
+		status := "offline"
+		if camData.State == "CONNECTED" {
+			status = "online"
+		}
+		// Use IsConnected if available, otherwise infer from State
+		isConnected := camData.IsConnected
+		if !isConnected && camData.State == "CONNECTED" {
+			isConnected = true
+		}
+
+		// Handle LastSeen (may be 0 if not provided)
+		var lastSeen time.Time
+		if camData.LastSeen > 0 {
+			lastSeen = time.Unix(camData.LastSeen/1000, 0)
+		} else {
+			lastSeen = time.Now() // Use current time as fallback
+		}
+
 		camera := Camera{
 			ID:          camData.ID,
 			Name:        camData.Name,
-			Type:        camData.Type,
-			Model:       camData.Model,
-			Status:      camData.State,
-			LastSeen:    time.Unix(camData.LastSeen/1000, 0),
+			Type:        camData.Type
+			if camData.Type == "" {
+				camera.Type = camData.ModelKey // Use modelKey as fallback
+			}
+			Model:       camData.Model
+			if camData.Model == "" {
+				camera.Model = camData.ModelKey // Use modelKey as fallback
+			}
+			Status:      status,
+			LastSeen:    lastSeen,
 			IsRecording: camData.IsRecording,
-			IsConnected: camData.IsConnected,
+			IsConnected: isConnected,
 			Mac:         camData.Mac,
 			Firmware:    camData.Firmware,
 		}
