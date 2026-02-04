@@ -81,10 +81,38 @@ func isPrivateIP(ipStr string) bool {
 	return false
 }
 
+// Auth Middleware
+func authMiddleware(next http.Handler, token string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Unauthorized: Missing Authorization header", http.StatusUnauthorized)
+			return
+		}
+
+		// Expect "Bearer <token>"
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" || parts[1] != token {
+			// Also check query param "token" for simple SSE test clients if needed, 
+			// but standard is Header. For stricter security, only Header.
+			http.Error(w, "Unauthorized: Invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	port := flag.String("port", "8080", "Port to listen on for SSE (default: 8080)")
 	mode := flag.String("mode", "sse", "Mode: 'stdio' or 'sse' (default: sse)")
+	token := flag.String("token", "", "Security token for SSE access (required in sse mode)")
 	flag.Parse()
+
+    if *mode == "sse" && *token == "" {
+        // Warning or Fatal? Let's Log fatal to force security.
+        log.Fatal("Error: -token is required in SSE mode for security.")
+    }
 
 	// Initialize Redis connection
 	rdb = redis.NewClient(&redis.Options{
@@ -229,7 +257,12 @@ func main() {
 		mux.Handle("/messages", sseServer)
 
 		log.Printf("Starting MCP SSE server on port %s (Private IPs only)...", *port)
-		if err := http.ListenAndServe(":"+*port, privateIPMiddleware(mux)); err != nil {
+        
+        // Chain middlewares: IP Check -> Auth Check -> Handler
+        handler := authMiddleware(sseServer, *token)
+        handler = privateIPMiddleware(handler)
+
+		if err := http.ListenAndServe(":"+*port, handler); err != nil {
 			log.Fatalf("Server error: %v", err)
 		}
 	}
