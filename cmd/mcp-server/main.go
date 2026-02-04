@@ -131,11 +131,14 @@ func main() {
 	// Tool: read_exchange_table
 	s.AddTool(mcp.NewTool("read_exchange_table",
 		mcp.WithDescription("Read all values from the exchange table. Returns a map of index to value."),
-		mcp.WithString("client_id", mcp.Description("Client ID to read from (default: 'default')"), mcp.Required(false)),
+		mcp.WithString("client_id", mcp.Description("Client ID to read from (default: 'default')")),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID := "default"
-		if cid, ok := request.Params.Arguments["client_id"].(string); ok && cid != "" {
-			clientID = cid
+		args, ok := request.Params.Arguments.(map[string]interface{})
+		if ok {
+			if cid, ok := args["client_id"].(string); ok && cid != "" {
+				clientID = cid
+			}
 		}
 
 		key := fmt.Sprintf("essensys:client:%s:exchange", clientID)
@@ -151,15 +154,20 @@ func main() {
 	// Tool: read_exchange_value
 	s.AddTool(mcp.NewTool("read_exchange_value",
 		mcp.WithDescription("Read a specific value from the exchange table by index."),
-		mcp.WithString("client_id", mcp.Description("Client ID (default: 'default')"), mcp.Required(false)),
-		mcp.WithNumber("index", mcp.Description("Index to read"), mcp.Required(true)),
+		mcp.WithString("client_id", mcp.Description("Client ID (default: 'default')")),
+		mcp.WithNumber("index", mcp.Description("Index to read"), mcp.Required()),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID := "default"
-		if cid, ok := request.Params.Arguments["client_id"].(string); ok && cid != "" {
+		args, ok := request.Params.Arguments.(map[string]interface{})
+		if !ok {
+			return mcp.NewToolResultError("Invalid arguments format"), nil
+		}
+
+		if cid, ok := args["client_id"].(string); ok && cid != "" {
 			clientID = cid
 		}
 
-		idxVal, ok := request.Params.Arguments["index"].(float64)
+		idxVal, ok := args["index"].(float64)
 		if !ok {
 			return mcp.NewToolResultError("Invalid index format"), nil
 		}
@@ -180,22 +188,27 @@ func main() {
 	// Tool: set_exchange_value
 	s.AddTool(mcp.NewTool("set_exchange_value",
 		mcp.WithDescription("Directly set a value in the exchange table (Warning: Bypasses order queue logic usually)."),
-		mcp.WithString("client_id", mcp.Description("Client ID (default: 'default')"), mcp.Required(false)),
-		mcp.WithNumber("index", mcp.Description("Index to set"), mcp.Required(true)),
-		mcp.WithString("value", mcp.Description("Value to set"), mcp.Required(true)),
+		mcp.WithString("client_id", mcp.Description("Client ID (default: 'default')")),
+		mcp.WithNumber("index", mcp.Description("Index to set"), mcp.Required()),
+		mcp.WithString("value", mcp.Description("Value to set"), mcp.Required()),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID := "default"
-		if cid, ok := request.Params.Arguments["client_id"].(string); ok && cid != "" {
+		args, ok := request.Params.Arguments.(map[string]interface{})
+		if !ok {
+			return mcp.NewToolResultError("Invalid arguments format"), nil
+		}
+
+		if cid, ok := args["client_id"].(string); ok && cid != "" {
 			clientID = cid
 		}
 
-		idxVal, ok := request.Params.Arguments["index"].(float64)
+		idxVal, ok := args["index"].(float64)
 		if !ok {
 			return mcp.NewToolResultError("Invalid index format"), nil
 		}
 		index := int(idxVal)
 
-		value, ok := request.Params.Arguments["value"].(string)
+		value, ok := args["value"].(string)
 		if !ok {
 			return mcp.NewToolResultError("Invalid value format"), nil
 		}
@@ -212,18 +225,23 @@ func main() {
 	// Tool: send_order
 	s.AddTool(mcp.NewTool("send_order",
 		mcp.WithDescription("Send an order (action) to the backend via the global action queue."),
-		mcp.WithString("guid", mcp.Description("Unique ID for the action (optional, auto-generated if empty)"), mcp.Required(false)),
-		mcp.WithString("params_json", mcp.Description("JSON string representing the parameters (ExchangeKV list) e.g. '[{\"k\":1,\"v\":\"1\"}]'"), mcp.Required(true)),
+		mcp.WithString("guid", mcp.Description("Unique ID for the action (optional, auto-generated if empty)")),
+		mcp.WithString("params_json", mcp.Description("JSON string representing the parameters (ExchangeKV list) e.g. '[{\"k\":1,\"v\":\"1\"}]'"), mcp.Required()),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		guid := ""
-		if g, ok := request.Params.Arguments["guid"].(string); ok {
+		args, ok := request.Params.Arguments.(map[string]interface{})
+		if !ok {
+			return mcp.NewToolResultError("Invalid arguments format"), nil
+		}
+
+		if g, ok := args["guid"].(string); ok {
 			guid = g
 		}
 		if guid == "" {
 			guid = fmt.Sprintf("mcp-%d", time.Now().UnixNano())
 		}
 
-		paramsStr, ok := request.Params.Arguments["params_json"].(string)
+		paramsStr, ok := args["params_json"].(string)
 		if !ok {
 			return mcp.NewToolResultError("Invalid params_json format"), nil
 		}
