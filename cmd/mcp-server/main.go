@@ -279,7 +279,8 @@ func main() {
 		}
 	} else {
 		// SSE Mode
-		sseServer := server.NewSSEServer(s, "http://localhost:"+*port)
+		baseURL := fmt.Sprintf("http://localhost:%s", *port)
+		sseServer := server.NewSSEServer(s, server.WithBaseURL(baseURL))
 		
 		// Setup Mux
 		mux := http.NewServeMux()
@@ -289,7 +290,7 @@ func main() {
 		log.Printf("Starting MCP SSE server on port %s (Private IPs only)...", *port)
         
         // Chain middlewares: IP Check -> Auth Check -> Handler
-        handler := authMiddleware(sseServer, *token)
+        handler := authMiddleware(mux, *token)
         handler = privateIPMiddleware(handler)
 
 		if err := http.ListenAndServe(":"+*port, handler); err != nil {
