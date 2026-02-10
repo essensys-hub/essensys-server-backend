@@ -134,8 +134,8 @@ func main() {
 		mcp.WithString("client_id", mcp.Description("Client ID to read from (default: 'default')")),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID := "default"
-		args, ok := request.Params.Arguments.(map[string]interface{})
-		if ok {
+		// Handle Arguments which can be map[string]interface{} or other types
+		if args, ok := request.Params.Arguments.(map[string]interface{}); ok {
 			if cid, ok := args["client_id"].(string); ok && cid != "" {
 				clientID = cid
 			}
@@ -155,11 +155,15 @@ func main() {
 	s.AddTool(mcp.NewTool("read_exchange_value",
 		mcp.WithDescription("Read a specific value from the exchange table by index."),
 		mcp.WithString("client_id", mcp.Description("Client ID (default: 'default')")),
-		mcp.WithNumber("index", mcp.Description("Index to read"), mcp.Required()),
+		mcp.WithNumber("index", mcp.Required(), mcp.Description("Index to read")),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID := "default"
-		args, ok := request.Params.Arguments.(map[string]interface{})
-		if !ok {
+		// Handle Arguments which can be map[string]interface{} or other types
+		var args map[string]interface{}
+		switch v := request.Params.Arguments.(type) {
+		case map[string]interface{}:
+			args = v
+		default:
 			return mcp.NewToolResultError("Invalid arguments format"), nil
 		}
 
@@ -189,12 +193,16 @@ func main() {
 	s.AddTool(mcp.NewTool("set_exchange_value",
 		mcp.WithDescription("Directly set a value in the exchange table (Warning: Bypasses order queue logic usually)."),
 		mcp.WithString("client_id", mcp.Description("Client ID (default: 'default')")),
-		mcp.WithNumber("index", mcp.Description("Index to set"), mcp.Required()),
-		mcp.WithString("value", mcp.Description("Value to set"), mcp.Required()),
+		mcp.WithNumber("index", mcp.Required(), mcp.Description("Index to set")),
+		mcp.WithString("value", mcp.Required(), mcp.Description("Value to set")),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID := "default"
-		args, ok := request.Params.Arguments.(map[string]interface{})
-		if !ok {
+		// Handle Arguments which can be map[string]interface{} or other types
+		var args map[string]interface{}
+		switch v := request.Params.Arguments.(type) {
+		case map[string]interface{}:
+			args = v
+		default:
 			return mcp.NewToolResultError("Invalid arguments format"), nil
 		}
 
@@ -226,11 +234,15 @@ func main() {
 	s.AddTool(mcp.NewTool("send_order",
 		mcp.WithDescription("Send an order (action) to the backend via the global action queue."),
 		mcp.WithString("guid", mcp.Description("Unique ID for the action (optional, auto-generated if empty)")),
-		mcp.WithString("params_json", mcp.Description("JSON string representing the parameters (ExchangeKV list) e.g. '[{\"k\":1,\"v\":\"1\"}]'"), mcp.Required()),
+		mcp.WithString("params_json", mcp.Required(), mcp.Description("JSON string representing the parameters (ExchangeKV list) e.g. '[{\"k\":1,\"v\":\"1\"}]'")),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		guid := ""
-		args, ok := request.Params.Arguments.(map[string]interface{})
-		if !ok {
+		// Handle Arguments which can be map[string]interface{} or other types
+		var args map[string]interface{}
+		switch v := request.Params.Arguments.(type) {
+		case map[string]interface{}:
+			args = v
+		default:
 			return mcp.NewToolResultError("Invalid arguments format"), nil
 		}
 

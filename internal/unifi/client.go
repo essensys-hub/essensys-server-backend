@@ -61,23 +61,11 @@ func (c *Client) authenticate() error {
 		return fmt.Errorf("UniFi Protect is disabled")
 	}
 
-	// If API key is provided, try to use it directly (no session auth needed for /api/bootstrap)
+	// If API key is provided, assume it works (will be validated on first request)
+	// The API key works directly with X-API-Key header, no session auth needed
 	if c.config.APIKey != "" {
-		// Test if API key works by trying /api/bootstrap
-		testURL := fmt.Sprintf("%s/api/bootstrap", c.config.BaseURL)
-		req, _ := http.NewRequest("GET", testURL, nil)
-		req.Header.Set("X-API-Key", c.config.APIKey)
-		req.Header.Set("Accept", "application/json")
-		
-		resp, err := c.httpClient.Do(req)
-		if err == nil {
-			defer resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				// API key works directly, no session needed
-				c.authenticated = true
-				return nil
-			}
-		}
+		c.authenticated = true
+		return nil
 	}
 
 	// Fallback to username/password session auth if API key alone doesn't work
@@ -153,7 +141,7 @@ func (c *Client) GetBootstrap() (*BootstrapResponse, error) {
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
-			lastErr = err
+			lastErr = fmt.Errorf("endpoint %s request failed: %w", endpoint, err)
 			continue
 		}
 		defer resp.Body.Close()
@@ -184,7 +172,15 @@ func (c *Client) GetBootstrap() (*BootstrapResponse, error) {
 			// Try to decode as BootstrapResponse (with cameras array)
 			var bootstrap BootstrapResponse
 			if err := json.Unmarshal(bodyBytes, &bootstrap); err != nil {
-				lastErr = fmt.Errorf("failed to decode JSON: %w", err)
+				// If endpoint returns direct cameras array, try that
+				if endpoint == "/proxy/protect/integration/v1/cameras" || endpoint == "/api/cameras" {
+					var camerasArray []CameraData
+					if err2 := json.Unmarshal(bodyBytes, &camerasArray); err2 == nil && len(camerasArray) > 0 {
+						bootstrap.Cameras = camerasArray
+						return &bootstrap, nil
+					}
+				}
+				lastErr = fmt.Errorf("endpoint %s failed to decode JSON: %w (body: %s)", endpoint, err, string(bodyBytes[:min(100, len(bodyBytes))]))
 				continue
 			}
 
@@ -228,6 +224,14 @@ func (c *Client) GetBootstrap() (*BootstrapResponse, error) {
 	}
 
 	return nil, fmt.Errorf("all endpoints failed: %w", lastErr)
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // GetCameraSnapshot retrieves a snapshot image for a camera

@@ -36,7 +36,13 @@ func (h *UniFiHandler) GetCameras(w http.ResponseWriter, r *http.Request) {
 	cameras, err := h.unifiClient.GetCameras()
 	if err != nil {
 		log.Printf("Failed to get cameras: %v", err)
-		http.Error(w, "Failed to retrieve cameras", http.StatusInternalServerError)
+		// Return error details in response for debugging
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Failed to retrieve cameras",
+			"details": err.Error(),
+		})
 		return
 	}
 
