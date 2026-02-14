@@ -81,6 +81,44 @@ func expandLegacyScenarioBlock(params []exchangeKV) []exchangeKV {
 	return out
 }
 
+func normalizeActionName(action string) string {
+	a := strings.ToLower(strings.TrimSpace(action))
+	a = strings.ReplaceAll(a, "é", "e")
+	a = strings.ReplaceAll(a, "è", "e")
+	a = strings.ReplaceAll(a, "ê", "e")
+	a = strings.ReplaceAll(a, "à", "a")
+	a = strings.ReplaceAll(a, "ù", "u")
+	return a
+}
+
+func deriveOppositeAction(index int, value, action, category string) (int, string, string, bool) {
+	switch strings.ToLower(category) {
+	case "light":
+		switch normalizeActionName(action) {
+		case "allumer":
+			if index >= 611 && index <= 616 {
+				return index - 6, value, "eteindre", true
+			}
+		case "eteindre":
+			if index >= 605 && index <= 610 {
+				return index + 6, value, "allumer", true
+			}
+		}
+	case "shutter":
+		switch normalizeActionName(action) {
+		case "ouvrir":
+			if index >= 617 && index <= 619 {
+				return index + 3, value, "fermer", true
+			}
+		case "fermer":
+			if index >= 620 && index <= 622 {
+				return index - 3, value, "ouvrir", true
+			}
+		}
+	}
+	return 0, "", "", false
+}
+
 // IP Whitelist Middleware
 func privateIPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -322,9 +360,10 @@ func main() {
 
 	// Tool: find_device_index
 	s.AddTool(mcp.NewTool("find_device_index",
-		mcp.WithDescription("Find the exchange table index and value for a device by name. Supports partial matching and category filtering. Categories: 'light', 'shutter', 'scenario', 'security', 'heating', 'irrigation'."),
+		mcp.WithDescription("Find exchange table index/value by device name. Supports partial matching, category filter, and action filter. Important: ON/OFF (or open/close) may use different indices. Use action='allumer' or action='eteindre' for lights, and action='ouvrir' or action='fermer' for shutters."),
 		mcp.WithString("device_name", mcp.Required(), mcp.Description("Device name to search for (partial match supported, e.g., 'chevet chambre petit 3', 'lampe salon', 'volet cuisine')")),
 		mcp.WithString("category", mcp.Description("Optional category filter: 'light', 'shutter', 'scenario', 'security', 'heating', 'irrigation'")),
+		mcp.WithString("action", mcp.Description("Optional action filter: e.g., 'allumer', 'eteindre', 'ouvrir', 'fermer'")),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var args map[string]interface{}
 		switch v := request.Params.Arguments.(type) {
@@ -345,8 +384,12 @@ func main() {
 		if cat, ok := args["category"].(string); ok {
 			category = strings.ToLower(cat)
 		}
+		actionFilter := ""
+		if action, ok := args["action"].(string); ok {
+			actionFilter = normalizeActionName(action)
+		}
 
-		log.Printf("[MCP TOOL] find_device_index called with device_name=%s, category=%s", deviceName, category)
+		log.Printf("[MCP TOOL] find_device_index called with device_name=%s, category=%s, action=%s", deviceName, category, actionFilter)
 
 		// Complete device mapping based on debug.md documentation
 		deviceMap := map[string][]map[string]interface{}{
@@ -502,7 +545,8 @@ func main() {
 			if strings.Contains(keyLower, deviceNameLower) || strings.Contains(deviceNameLower, keyLower) {
 				// Filter by category if specified
 				for _, device := range devices {
-					if category == "" || device["category"] == category {
+					deviceActionNorm := normalizeActionName(fmt.Sprintf("%v", device["action"]))
+					if (category == "" || device["category"] == category) && (actionFilter == "" || deviceActionNorm == actionFilter) {
 						matches = append(matches, device)
 					}
 				}
@@ -532,6 +576,16 @@ func main() {
 			resultParts = append(resultParts, fmt.Sprintf("   Action: %s", match["action"]))
 			resultParts = append(resultParts, fmt.Sprintf("   Catégorie: %s", match["category"]))
 			resultParts = append(resultParts, fmt.Sprintf("   Commande MCP: send_order avec params_json='[{\"k\":%d,\"v\":\"%s\"}]'", match["index"], match["value"]))
+			matchIndex, idxOK := match["index"].(int)
+			matchValue, valOK := match["value"].(string)
+			matchAction, actionOK := match["action"].(string)
+			matchCategory, categoryOK := match["category"].(string)
+			if idxOK && valOK && actionOK && categoryOK {
+				if oppositeIndex, oppositeValue, oppositeAction, ok := deriveOppositeAction(matchIndex, matchValue, matchAction, matchCategory); ok {
+					resultParts = append(resultParts, fmt.Sprintf("   Action opposée (%s): index=%d, valeur=%s", oppositeAction, oppositeIndex, oppositeValue))
+					resultParts = append(resultParts, fmt.Sprintf("   Commande MCP (%s): send_order avec params_json='[{\"k\":%d,\"v\":\"%s\"}]'", oppositeAction, oppositeIndex, oppositeValue))
+				}
+			}
 		}
 
 		result := strings.Join(resultParts, "\n")
