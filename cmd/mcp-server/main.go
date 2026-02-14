@@ -150,7 +150,7 @@ func main() {
 
 	// Tool: read_exchange_table
 	s.AddTool(mcp.NewTool("read_exchange_table",
-		mcp.WithDescription("Read all values from the exchange table. Returns a map of index to value."),
+		mcp.WithDescription("Read all values from the exchange table. Returns a map of index to value. Use find_device_index to search for specific devices by name."),
 		mcp.WithString("client_id", mcp.Description("Client ID to read from (default: 'default')")),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID := "default"
@@ -276,6 +276,75 @@ func main() {
 
 		result := fmt.Sprintf("Set index %d to '%s' for client %s", index, value, clientID)
 		log.Printf("[MCP TOOL] set_exchange_value success: %s", result)
+		return mcp.NewToolResultText(result), nil
+	})
+
+	// Tool: find_device_index
+	s.AddTool(mcp.NewTool("find_device_index",
+		mcp.WithDescription("Find the exchange table index and value for a device by name (e.g., 'chevet chambre petit 3', 'lampe salon', 'volet cuisine'). Returns matching devices with their indices and values."),
+		mcp.WithString("device_name", mcp.Required(), mcp.Description("Device name to search for (partial match supported)")),
+	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args map[string]interface{}
+		switch v := request.Params.Arguments.(type) {
+		case map[string]interface{}:
+			args = v
+		default:
+			log.Printf("[MCP TOOL] find_device_index: Invalid arguments format")
+			return mcp.NewToolResultError("Invalid arguments format"), nil
+		}
+
+		deviceName, ok := args["device_name"].(string)
+		if !ok || deviceName == "" {
+			log.Printf("[MCP TOOL] find_device_index: Invalid device_name format")
+			return mcp.NewToolResultError("device_name is required"), nil
+		}
+
+		log.Printf("[MCP TOOL] find_device_index called with device_name=%s", deviceName)
+
+		// Device mapping based on documentation
+		deviceMap := map[string][]map[string]interface{}{
+			// Éclairage - Allumer CHB (Chambres)
+			"chevet chambre petit 3": {{"index": 613, "value": "64", "action": "allumer", "description": "Chevet Petite Chambre 3"}},
+			"chevet petite chambre 3": {{"index": 613, "value": "64", "action": "allumer", "description": "Chevet Petite Chambre 3"}},
+			"petite chambre 3 chevet": {{"index": 613, "value": "64", "action": "allumer", "description": "Chevet Petite Chambre 3"}},
+			"lampe petite chambre 3": {{"index": 613, "value": "64", "action": "allumer", "description": "Lampe Petite Chambre 3"}},
+			"petite chambre 3": {{"index": 613, "value": "64", "action": "allumer", "description": "Lampe Petite Chambre 3"}},
+			
+			// Autres équipements courants (exemples)
+			"lampe entrée": {{"index": 611, "value": "1", "action": "allumer", "description": "Lampe Entrée"}},
+			"lampe salon": {{"index": 611, "value": "2", "action": "allumer", "description": "Lampe Salon 1"}},
+			"volet salon": {{"index": 617, "value": "1", "action": "ouvrir", "description": "Volet Salon 1"}},
+		}
+
+		// Search for matches (case-insensitive, partial)
+		deviceNameLower := strings.ToLower(deviceName)
+		var matches []map[string]interface{}
+
+		for key, devices := range deviceMap {
+			if strings.Contains(strings.ToLower(key), deviceNameLower) || strings.Contains(deviceNameLower, strings.ToLower(key)) {
+				matches = append(matches, devices...)
+			}
+		}
+
+		if len(matches) == 0 {
+			result := fmt.Sprintf("Aucun équipement trouvé pour '%s'. Utilisez des termes comme 'chevet', 'lampe', 'volet', 'chambre', 'salon', etc.", deviceName)
+			log.Printf("[MCP TOOL] find_device_index: No matches found for '%s'", deviceName)
+			return mcp.NewToolResultText(result), nil
+		}
+
+		// Format results
+		var resultParts []string
+		resultParts = append(resultParts, fmt.Sprintf("Équipements trouvés pour '%s':", deviceName))
+		for i, match := range matches {
+			resultParts = append(resultParts, fmt.Sprintf("\n%d. %s", i+1, match["description"]))
+			resultParts = append(resultParts, fmt.Sprintf("   Index: %d", match["index"]))
+			resultParts = append(resultParts, fmt.Sprintf("   Valeur: %s", match["value"]))
+			resultParts = append(resultParts, fmt.Sprintf("   Action: %s", match["action"]))
+			resultParts = append(resultParts, fmt.Sprintf("   Commande MCP: send_order avec params_json='[{\"k\":%d,\"v\":\"%s\"}]'", match["index"], match["value"]))
+		}
+
+		result := strings.Join(resultParts, "\n")
+		log.Printf("[MCP TOOL] find_device_index result: %s", result)
 		return mcp.NewToolResultText(result), nil
 	})
 
