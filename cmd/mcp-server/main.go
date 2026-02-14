@@ -10,6 +10,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -117,6 +119,83 @@ func deriveOppositeAction(index int, value, action, category string) (int, strin
 		}
 	}
 	return 0, "", "", false
+}
+
+const essensysSkillMarkdown = `---
+name: essensys-quick-commands
+description: Explains Essensys backend flow and fast command patterns to avoid repeated long exchanges about the reference table. Use when the user asks to control lights/shutters/scenarios and when ON/OFF may use different indices.
+---
+
+# Essensys Quick Commands
+
+## Goal
+
+Respond fast with minimal tool calls by using direct command patterns for common actions.
+
+## Fast flow
+
+1. Use find_device_index with device_name (+ category/action when possible).
+2. Use send_order with returned index/value.
+3. Let send_order auto-expand legacy block (590 + 605..622) when needed.
+
+## Important rule
+
+For lights and shutters, ON/OFF or OPEN/CLOSE can use different indices.
+
+Example:
+- allumer chevet petite chambre 3 -> index 613, value 64
+- eteindre chevet petite chambre 3 -> index 607, value 64
+
+## Response style
+
+- Keep answers short.
+- Return: Cause, Technical proof (index/value), and exact command to run.
+`
+
+const essensysSkillReferenceMarkdown = `# Essensys quick reference
+
+## Backend path
+
+MCP/API -> Redis list essensys:global:actions -> /api/myactions -> /api/done/{guid}
+
+## Legacy scenario block
+
+When payload contains light/shutter indices (605..622), include full block:
+- 590 trigger
+- 605..622 complete (missing values set to 0)
+
+## Action symmetry
+
+Lights:
+- allumer indexes: 611..616
+- eteindre indexes: 605..610 (often ON index - 6)
+
+Shutters:
+- ouvrir indexes: 617..619
+- fermer indexes: 620..622 (often OPEN index + 3)
+`
+
+func installEssensysSkillPack(targetDir string) (string, string, error) {
+	cleanDir := filepath.Clean(strings.TrimSpace(targetDir))
+	if cleanDir == "" || cleanDir == "." {
+		cleanDir = ".cursor/skills/essensys-quick-commands"
+	}
+
+	if err := os.MkdirAll(cleanDir, 0o755); err != nil {
+		return "", "", fmt.Errorf("failed to create skill directory: %w", err)
+	}
+
+	skillPath := filepath.Join(cleanDir, "SKILL.md")
+	refPath := filepath.Join(cleanDir, "reference.md")
+
+	if err := os.WriteFile(skillPath, []byte(essensysSkillMarkdown), 0o644); err != nil {
+		return "", "", fmt.Errorf("failed to write SKILL.md: %w", err)
+	}
+	if err := os.WriteFile(refPath, []byte(essensysSkillReferenceMarkdown), 0o644); err != nil {
+		return "", "", fmt.Errorf("failed to write reference.md: %w", err)
+	}
+
+	return skillPath, refPath, nil
 }
 
 // IP Whitelist Middleware
@@ -590,6 +669,37 @@ func main() {
 
 		result := strings.Join(resultParts, "\n")
 		log.Printf("[MCP TOOL] find_device_index result: %s", result)
+		return mcp.NewToolResultText(result), nil
+	})
+
+	// Tool: download_essensys_skill
+	s.AddTool(mcp.NewTool("download_essensys_skill",
+		mcp.WithDescription("Create a compact Essensys skill pack (SKILL.md + reference.md) to reduce repeated long exchanges about tools and reference table. Use this to speed up AI control workflows."),
+		mcp.WithString("target_dir", mcp.Description("Optional directory where the skill will be generated. Default: .cursor/skills/essensys-quick-commands")),
+	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args map[string]interface{}
+		switch v := request.Params.Arguments.(type) {
+		case map[string]interface{}:
+			args = v
+		default:
+			log.Printf("[MCP TOOL] download_essensys_skill: Invalid arguments format")
+			return mcp.NewToolResultError("Invalid arguments format"), nil
+		}
+
+		targetDir := ".cursor/skills/essensys-quick-commands"
+		if raw, ok := args["target_dir"].(string); ok && strings.TrimSpace(raw) != "" {
+			targetDir = raw
+		}
+
+		log.Printf("[MCP TOOL] download_essensys_skill called with target_dir=%s", targetDir)
+		skillPath, refPath, err := installEssensysSkillPack(targetDir)
+		if err != nil {
+			log.Printf("[MCP TOOL] download_essensys_skill error: %v", err)
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to generate Essensys skill pack: %v", err)), nil
+		}
+
+		result := fmt.Sprintf("Essensys skill pack generated.\n- SKILL.md: %s\n- reference.md: %s\n\nNext step: load this skill in your agent environment to reduce repeated tool calls and long reference-table explanations.", skillPath, refPath)
+		log.Printf("[MCP TOOL] download_essensys_skill success: %s", result)
 		return mcp.NewToolResultText(result), nil
 	})
 
