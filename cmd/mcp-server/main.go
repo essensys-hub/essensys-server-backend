@@ -281,8 +281,9 @@ func main() {
 
 	// Tool: find_device_index
 	s.AddTool(mcp.NewTool("find_device_index",
-		mcp.WithDescription("Find the exchange table index and value for a device by name (e.g., 'chevet chambre petit 3', 'lampe salon', 'volet cuisine'). Returns matching devices with their indices and values."),
-		mcp.WithString("device_name", mcp.Required(), mcp.Description("Device name to search for (partial match supported)")),
+		mcp.WithDescription("Find the exchange table index and value for a device by name. Supports partial matching and category filtering. Categories: 'light', 'shutter', 'scenario', 'security', 'heating', 'irrigation'."),
+		mcp.WithString("device_name", mcp.Required(), mcp.Description("Device name to search for (partial match supported, e.g., 'chevet chambre petit 3', 'lampe salon', 'volet cuisine')")),
+		mcp.WithString("category", mcp.Description("Optional category filter: 'light', 'shutter', 'scenario', 'security', 'heating', 'irrigation'")),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var args map[string]interface{}
 		switch v := request.Params.Arguments.(type) {
@@ -299,21 +300,156 @@ func main() {
 			return mcp.NewToolResultError("device_name is required"), nil
 		}
 
-		log.Printf("[MCP TOOL] find_device_index called with device_name=%s", deviceName)
+		category := ""
+		if cat, ok := args["category"].(string); ok {
+			category = strings.ToLower(cat)
+		}
 
-		// Device mapping based on documentation
+		log.Printf("[MCP TOOL] find_device_index called with device_name=%s, category=%s", deviceName, category)
+
+		// Complete device mapping based on debug.md documentation
 		deviceMap := map[string][]map[string]interface{}{
-			// Éclairage - Allumer CHB (Chambres)
-			"chevet chambre petit 3": {{"index": 613, "value": "64", "action": "allumer", "description": "Chevet Petite Chambre 3"}},
-			"chevet petite chambre 3": {{"index": 613, "value": "64", "action": "allumer", "description": "Chevet Petite Chambre 3"}},
-			"petite chambre 3 chevet": {{"index": 613, "value": "64", "action": "allumer", "description": "Chevet Petite Chambre 3"}},
-			"lampe petite chambre 3": {{"index": 613, "value": "64", "action": "allumer", "description": "Lampe Petite Chambre 3"}},
-			"petite chambre 3": {{"index": 613, "value": "64", "action": "allumer", "description": "Lampe Petite Chambre 3"}},
-			
-			// Autres équipements courants (exemples)
-			"lampe entrée": {{"index": 611, "value": "1", "action": "allumer", "description": "Lampe Entrée"}},
-			"lampe salon": {{"index": 611, "value": "2", "action": "allumer", "description": "Lampe Salon 1"}},
-			"volet salon": {{"index": 617, "value": "1", "action": "ouvrir", "description": "Volet Salon 1"}},
+			// Éclairage - ALLUMER PDV (Pièces De Vie)
+			"lampe entrée": {{"index": 611, "value": "1", "action": "allumer", "category": "light", "description": "Lampe Entrée"}},
+			"entrée": {{"index": 611, "value": "1", "action": "allumer", "category": "light", "description": "Lampe Entrée"}},
+			"lampe salon 1": {{"index": 611, "value": "2", "action": "allumer", "category": "light", "description": "Lampe Salon 1"}},
+			"lampe salon": {{"index": 611, "value": "2", "action": "allumer", "category": "light", "description": "Lampe Salon 1"}},
+			"salon lampe": {{"index": 611, "value": "2", "action": "allumer", "category": "light", "description": "Lampe Salon 1"}},
+			"lampe salon 2": {{"index": 611, "value": "4", "action": "allumer", "category": "light", "description": "Lampe Salon 2"}},
+			"lampe dressing 1": {{"index": 611, "value": "8", "action": "allumer", "category": "light", "description": "Lampe Dressing 1"}},
+			"dressing 1": {{"index": 611, "value": "8", "action": "allumer", "category": "light", "description": "Lampe Dressing 1"}},
+			"lampe dressing 2": {{"index": 611, "value": "16", "action": "allumer", "category": "light", "description": "Lampe Dressing 2"}},
+			"dressing 2": {{"index": 611, "value": "16", "action": "allumer", "category": "light", "description": "Lampe Dressing 2"}},
+			"variateur bureau": {{"index": 612, "value": "32", "action": "allumer", "category": "light", "description": "Variateur Bureau"}},
+			"bureau variateur": {{"index": 612, "value": "32", "action": "allumer", "category": "light", "description": "Variateur Bureau"}},
+			"variateur sam": {{"index": 612, "value": "64", "action": "allumer", "category": "light", "description": "Variateur Salle à Manger"}},
+			"variateur salle à manger": {{"index": 612, "value": "64", "action": "allumer", "category": "light", "description": "Variateur Salle à Manger"}},
+			"variateur salon": {{"index": 612, "value": "128", "action": "allumer", "category": "light", "description": "Variateur Salon"}},
+
+			// Éclairage - ALLUMER CHB (Chambres)
+			"lampe escalier": {{"index": 613, "value": "1", "action": "allumer", "category": "light", "description": "Lampe Escalier"}},
+			"escalier": {{"index": 613, "value": "1", "action": "allumer", "category": "light", "description": "Lampe Escalier"}},
+			"lampe grande chambre 1": {{"index": 613, "value": "2", "action": "allumer", "category": "light", "description": "Lampe Grande Chambre 1"}},
+			"grande chambre 1": {{"index": 613, "value": "2", "action": "allumer", "category": "light", "description": "Lampe Grande Chambre 1"}},
+			"lampe grande chambre 2": {{"index": 613, "value": "4", "action": "allumer", "category": "light", "description": "Lampe Grande Chambre 2"}},
+			"grande chambre 2": {{"index": 613, "value": "4", "action": "allumer", "category": "light", "description": "Lampe Grande Chambre 2"}},
+			"lampe petite chambre 1": {{"index": 613, "value": "8", "action": "allumer", "category": "light", "description": "Lampe Petite Chambre 1 (1)"}},
+			"petite chambre 1": {{"index": 613, "value": "8", "action": "allumer", "category": "light", "description": "Lampe Petite Chambre 1 (1)"}},
+			"lampe petite chambre 1 2": {{"index": 613, "value": "16", "action": "allumer", "category": "light", "description": "Lampe Petite Chambre 1 (2)"}},
+			"lampe petite chambre 2": {{"index": 613, "value": "32", "action": "allumer", "category": "light", "description": "Lampe Petite Chambre 2"}},
+			"petite chambre 2": {{"index": 613, "value": "32", "action": "allumer", "category": "light", "description": "Lampe Petite Chambre 2"}},
+			"lampe petite chambre 3": {{"index": 613, "value": "64", "action": "allumer", "category": "light", "description": "Lampe Petite Chambre 3"}},
+			"petite chambre 3": {{"index": 613, "value": "64", "action": "allumer", "category": "light", "description": "Lampe Petite Chambre 3"}},
+			"chevet chambre petit 3": {{"index": 613, "value": "64", "action": "allumer", "category": "light", "description": "Chevet Petite Chambre 3"}},
+			"chevet petite chambre 3": {{"index": 613, "value": "64", "action": "allumer", "category": "light", "description": "Chevet Petite Chambre 3"}},
+			"petite chambre 3 chevet": {{"index": 613, "value": "64", "action": "allumer", "category": "light", "description": "Chevet Petite Chambre 3"}},
+			"variateur petite chambre 3": {{"index": 614, "value": "16", "action": "allumer", "category": "light", "description": "Variateur Petite Chambre 3"}},
+			"variateur petite chambre 2": {{"index": 614, "value": "32", "action": "allumer", "category": "light", "description": "Variateur Petite Chambre 2"}},
+			"variateur petite chambre 1": {{"index": 614, "value": "64", "action": "allumer", "category": "light", "description": "Variateur Petite Chambre 1"}},
+			"variateur grande chambre": {{"index": 614, "value": "128", "action": "allumer", "category": "light", "description": "Variateur Grande Chambre"}},
+
+			// Éclairage - ALLUMER PDE (Pièces d'Eau)
+			"lampe cuisine 1": {{"index": 615, "value": "1", "action": "allumer", "category": "light", "description": "Lampe Cuisine 1"}},
+			"cuisine 1": {{"index": 615, "value": "1", "action": "allumer", "category": "light", "description": "Lampe Cuisine 1"}},
+			"lampe cuisine 2": {{"index": 615, "value": "2", "action": "allumer", "category": "light", "description": "Lampe Cuisine 2"}},
+			"cuisine 2": {{"index": 615, "value": "2", "action": "allumer", "category": "light", "description": "Lampe Cuisine 2"}},
+			"lampe sdb 1": {{"index": 615, "value": "4", "action": "allumer", "category": "light", "description": "Lampe SDB 1"}},
+			"salle de bain 1": {{"index": 615, "value": "4", "action": "allumer", "category": "light", "description": "Lampe SDB 1"}},
+			"lampe sdb 2": {{"index": 615, "value": "8", "action": "allumer", "category": "light", "description": "Lampe SDB 2 (1)"}},
+			"salle de bain 2": {{"index": 615, "value": "8", "action": "allumer", "category": "light", "description": "Lampe SDB 2 (1)"}},
+			"lampe sdb 2 2": {{"index": 615, "value": "16", "action": "allumer", "category": "light", "description": "Lampe SDB 2 (2)"}},
+			"lampe wc 1": {{"index": 615, "value": "32", "action": "allumer", "category": "light", "description": "Lampe WC 1"}},
+			"wc 1": {{"index": 615, "value": "32", "action": "allumer", "category": "light", "description": "Lampe WC 1"}},
+			"lampe wc 2": {{"index": 615, "value": "64", "action": "allumer", "category": "light", "description": "Lampe WC 2"}},
+			"wc 2": {{"index": 615, "value": "64", "action": "allumer", "category": "light", "description": "Lampe WC 2"}},
+			"lampe service": {{"index": 615, "value": "128", "action": "allumer", "category": "light", "description": "Lampe Service"}},
+			"service": {{"index": 615, "value": "128", "action": "allumer", "category": "light", "description": "Lampe Service"}},
+			"lampe dégagement 1": {{"index": 616, "value": "1", "action": "allumer", "category": "light", "description": "Lampe Dégagement 1"}},
+			"dégagement 1": {{"index": 616, "value": "1", "action": "allumer", "category": "light", "description": "Lampe Dégagement 1"}},
+			"lampe dégagement 2": {{"index": 616, "value": "2", "action": "allumer", "category": "light", "description": "Lampe Dégagement 2"}},
+			"dégagement 2": {{"index": 616, "value": "2", "action": "allumer", "category": "light", "description": "Lampe Dégagement 2"}},
+			"lampe terrasse": {{"index": 616, "value": "4", "action": "allumer", "category": "light", "description": "Lampe Terrasse"}},
+			"terrasse": {{"index": 616, "value": "4", "action": "allumer", "category": "light", "description": "Lampe Terrasse"}},
+			"lampe annexe 1": {{"index": 616, "value": "8", "action": "allumer", "category": "light", "description": "Lampe Annexe 1"}},
+			"annexe 1": {{"index": 616, "value": "8", "action": "allumer", "category": "light", "description": "Lampe Annexe 1"}},
+			"lampe annexe 2": {{"index": 616, "value": "16", "action": "allumer", "category": "light", "description": "Lampe Annexe 2"}},
+			"annexe 2": {{"index": 616, "value": "16", "action": "allumer", "category": "light", "description": "Lampe Annexe 2"}},
+			"variateur sdb 1": {{"index": 616, "value": "128", "action": "allumer", "category": "light", "description": "Variateur SDB 1"}},
+
+			// Éclairage - ÉTEINDRE (mêmes indices mais action différente)
+			"éteindre entrée": {{"index": 605, "value": "1", "action": "éteindre", "category": "light", "description": "Éteindre Entrée"}},
+			"éteindre salon": {{"index": 605, "value": "2", "action": "éteindre", "category": "light", "description": "Éteindre Salon 1"}},
+			"éteindre chambres": {{"index": 607, "value": "64", "action": "éteindre", "category": "light", "description": "Éteindre Petite Chambre 3"}},
+
+			// Volets - OUVRIR PDV
+			"volet salon 1": {{"index": 617, "value": "1", "action": "ouvrir", "category": "shutter", "description": "Volet Salon 1"}},
+			"ouvrir volet salon 1": {{"index": 617, "value": "1", "action": "ouvrir", "category": "shutter", "description": "Volet Salon 1"}},
+			"volet salon 2": {{"index": 617, "value": "2", "action": "ouvrir", "category": "shutter", "description": "Volet Salon 2"}},
+			"ouvrir volet salon 2": {{"index": 617, "value": "2", "action": "ouvrir", "category": "shutter", "description": "Volet Salon 2"}},
+			"volet salon 3": {{"index": 617, "value": "4", "action": "ouvrir", "category": "shutter", "description": "Volet Salon 3"}},
+			"ouvrir volet salon 3": {{"index": 617, "value": "4", "action": "ouvrir", "category": "shutter", "description": "Volet Salon 3"}},
+			"volet sam 1": {{"index": 617, "value": "8", "action": "ouvrir", "category": "shutter", "description": "Volet SAM 1"}},
+			"volet salle à manger 1": {{"index": 617, "value": "8", "action": "ouvrir", "category": "shutter", "description": "Volet SAM 1"}},
+			"volet sam 2": {{"index": 617, "value": "16", "action": "ouvrir", "category": "shutter", "description": "Volet SAM 2"}},
+			"volet salle à manger 2": {{"index": 617, "value": "16", "action": "ouvrir", "category": "shutter", "description": "Volet SAM 2"}},
+			"volet bureau": {{"index": 617, "value": "32", "action": "ouvrir", "category": "shutter", "description": "Volet Bureau"}},
+			"ouvrir volet bureau": {{"index": 617, "value": "32", "action": "ouvrir", "category": "shutter", "description": "Volet Bureau"}},
+
+			// Volets - OUVRIR CHB
+			"volet grande chambre 1": {{"index": 618, "value": "1", "action": "ouvrir", "category": "shutter", "description": "Volet Grande Chambre 1"}},
+			"ouvrir volet grande chambre 1": {{"index": 618, "value": "1", "action": "ouvrir", "category": "shutter", "description": "Volet Grande Chambre 1"}},
+			"volet grande chambre 2": {{"index": 618, "value": "2", "action": "ouvrir", "category": "shutter", "description": "Volet Grande Chambre 2"}},
+			"ouvrir volet grande chambre 2": {{"index": 618, "value": "2", "action": "ouvrir", "category": "shutter", "description": "Volet Grande Chambre 2"}},
+			"volet petite chambre 1": {{"index": 618, "value": "4", "action": "ouvrir", "category": "shutter", "description": "Volet Petite Chambre 1"}},
+			"ouvrir volet petite chambre 1": {{"index": 618, "value": "4", "action": "ouvrir", "category": "shutter", "description": "Volet Petite Chambre 1"}},
+			"volet petite chambre 2": {{"index": 618, "value": "8", "action": "ouvrir", "category": "shutter", "description": "Volet Petite Chambre 2"}},
+			"ouvrir volet petite chambre 2": {{"index": 618, "value": "8", "action": "ouvrir", "category": "shutter", "description": "Volet Petite Chambre 2"}},
+			"volet petite chambre 3": {{"index": 618, "value": "16", "action": "ouvrir", "category": "shutter", "description": "Volet Petite Chambre 3"}},
+			"ouvrir volet petite chambre 3": {{"index": 618, "value": "16", "action": "ouvrir", "category": "shutter", "description": "Volet Petite Chambre 3"}},
+
+			// Volets - OUVRIR PDE
+			"volet cuisine 1": {{"index": 619, "value": "1", "action": "ouvrir", "category": "shutter", "description": "Volet Cuisine 1"}},
+			"ouvrir volet cuisine 1": {{"index": 619, "value": "1", "action": "ouvrir", "category": "shutter", "description": "Volet Cuisine 1"}},
+			"volet cuisine 2": {{"index": 619, "value": "2", "action": "ouvrir", "category": "shutter", "description": "Volet Cuisine 2"}},
+			"ouvrir volet cuisine 2": {{"index": 619, "value": "2", "action": "ouvrir", "category": "shutter", "description": "Volet Cuisine 2"}},
+			"volet sdb 1": {{"index": 619, "value": "4", "action": "ouvrir", "category": "shutter", "description": "Volet SDB 1"}},
+			"ouvrir volet sdb 1": {{"index": 619, "value": "4", "action": "ouvrir", "category": "shutter", "description": "Volet SDB 1"}},
+			"store terrasse": {{"index": 619, "value": "8", "action": "ouvrir", "category": "shutter", "description": "Remonter Store Terrasse"}},
+			"remonter store terrasse": {{"index": 619, "value": "8", "action": "ouvrir", "category": "shutter", "description": "Remonter Store Terrasse"}},
+
+			// Volets - FERMER (mêmes valeurs mais index différent)
+			"fermer volet salon 1": {{"index": 620, "value": "1", "action": "fermer", "category": "shutter", "description": "Fermer Volet Salon 1"}},
+			"fermer volet grande chambre 1": {{"index": 621, "value": "1", "action": "fermer", "category": "shutter", "description": "Fermer Volet Grande Chambre 1"}},
+			"fermer volet petite chambre 3": {{"index": 621, "value": "16", "action": "fermer", "category": "shutter", "description": "Fermer Volet Petite Chambre 3"}},
+			"fermer volet cuisine 1": {{"index": 622, "value": "1", "action": "fermer", "category": "shutter", "description": "Fermer Volet Cuisine 1"}},
+
+			// Scénarios
+			"scénario 1": {{"index": 590, "value": "1", "action": "scénario", "category": "scenario", "description": "Scénario 1 (Réservé Internet)"}},
+			"scénario 2": {{"index": 590, "value": "2", "action": "scénario", "category": "scenario", "description": "Scénario 2 (Je sors)"}},
+			"scénario je sors": {{"index": 590, "value": "2", "action": "scénario", "category": "scenario", "description": "Scénario 2 (Je sors)"}},
+			"scénario 3": {{"index": 590, "value": "3", "action": "scénario", "category": "scenario", "description": "Scénario 3 (Je pars en vacances)"}},
+			"scénario vacances": {{"index": 590, "value": "3", "action": "scénario", "category": "scenario", "description": "Scénario 3 (Je pars en vacances)"}},
+			"scénario 4": {{"index": 590, "value": "4", "action": "scénario", "category": "scenario", "description": "Scénario 4 (Je rentre)"}},
+			"scénario je rentre": {{"index": 590, "value": "4", "action": "scénario", "category": "scenario", "description": "Scénario 4 (Je rentre)"}},
+			"scénario 5": {{"index": 590, "value": "5", "action": "scénario", "category": "scenario", "description": "Scénario 5 (Je vais me coucher)"}},
+			"scénario coucher": {{"index": 590, "value": "5", "action": "scénario", "category": "scenario", "description": "Scénario 5 (Je vais me coucher)"}},
+			"scénario 6": {{"index": 590, "value": "6", "action": "scénario", "category": "scenario", "description": "Scénario 6 (Je me lève)"}},
+			"scénario lever": {{"index": 590, "value": "6", "action": "scénario", "category": "scenario", "description": "Scénario 6 (Je me lève)"}},
+			"scénario 7": {{"index": 590, "value": "7", "action": "scénario", "category": "scenario", "description": "Scénario 7 (Personnalisé 1)"}},
+			"scénario 8": {{"index": 590, "value": "8", "action": "scénario", "category": "scenario", "description": "Scénario 8 (Personnalisé 2)"}},
+
+			// Sécurité
+			"alarme": {{"index": 593, "value": "1", "action": "activer", "category": "security", "description": "Mettre l'alarme"}},
+			"mettre alarme": {{"index": 593, "value": "1", "action": "activer", "category": "security", "description": "Mettre l'alarme"}},
+			"enlever alarme": {{"index": 593, "value": "2", "action": "désactiver", "category": "security", "description": "Enlever l'alarme"}},
+			"couper prises sécurité": {{"index": 623, "value": "1", "action": "couper", "category": "security", "description": "Couper prises sécurité"}},
+			"remettre prises sécurité": {{"index": 623, "value": "2", "action": "rétablir", "category": "security", "description": "Remettre prises sécurité"}},
+			"couper machines": {{"index": 624, "value": "1", "action": "couper", "category": "security", "description": "Couper machines à laver"}},
+			"remettre machines": {{"index": 624, "value": "2", "action": "rétablir", "category": "security", "description": "Remettre machines à laver"}},
+
+			// Arrosage
+			"arrosage": {{"index": 363, "value": "255", "action": "automatique", "category": "irrigation", "description": "Arrosage automatique"}},
+			"arrosage automatique": {{"index": 363, "value": "255", "action": "automatique", "category": "irrigation", "description": "Arrosage automatique"}},
 		}
 
 		// Search for matches (case-insensitive, partial)
@@ -321,25 +457,39 @@ func main() {
 		var matches []map[string]interface{}
 
 		for key, devices := range deviceMap {
-			if strings.Contains(strings.ToLower(key), deviceNameLower) || strings.Contains(deviceNameLower, strings.ToLower(key)) {
-				matches = append(matches, devices...)
+			keyLower := strings.ToLower(key)
+			if strings.Contains(keyLower, deviceNameLower) || strings.Contains(deviceNameLower, keyLower) {
+				// Filter by category if specified
+				for _, device := range devices {
+					if category == "" || device["category"] == category {
+						matches = append(matches, device)
+					}
+				}
 			}
 		}
 
 		if len(matches) == 0 {
-			result := fmt.Sprintf("Aucun équipement trouvé pour '%s'. Utilisez des termes comme 'chevet', 'lampe', 'volet', 'chambre', 'salon', etc.", deviceName)
-			log.Printf("[MCP TOOL] find_device_index: No matches found for '%s'", deviceName)
+			categoryHint := ""
+			if category != "" {
+				categoryHint = fmt.Sprintf(" dans la catégorie '%s'", category)
+			}
+			result := fmt.Sprintf("Aucun équipement trouvé pour '%s'%s.\n\nCatégories disponibles: 'light' (éclairage), 'shutter' (volets), 'scenario' (scénarios), 'security' (sécurité), 'heating' (chauffage), 'irrigation' (arrosage).\n\nExemples de recherche: 'chevet', 'lampe', 'volet', 'chambre', 'salon', 'scénario', 'alarme', etc.", deviceName, categoryHint)
+			log.Printf("[MCP TOOL] find_device_index: No matches found for '%s' (category: %s)", deviceName, category)
 			return mcp.NewToolResultText(result), nil
 		}
 
 		// Format results
 		var resultParts []string
 		resultParts = append(resultParts, fmt.Sprintf("Équipements trouvés pour '%s':", deviceName))
+		if category != "" {
+			resultParts = append(resultParts, fmt.Sprintf("(Filtré par catégorie: %s)", category))
+		}
 		for i, match := range matches {
 			resultParts = append(resultParts, fmt.Sprintf("\n%d. %s", i+1, match["description"]))
 			resultParts = append(resultParts, fmt.Sprintf("   Index: %d", match["index"]))
 			resultParts = append(resultParts, fmt.Sprintf("   Valeur: %s", match["value"]))
 			resultParts = append(resultParts, fmt.Sprintf("   Action: %s", match["action"]))
+			resultParts = append(resultParts, fmt.Sprintf("   Catégorie: %s", match["category"]))
 			resultParts = append(resultParts, fmt.Sprintf("   Commande MCP: send_order avec params_json='[{\"k\":%d,\"v\":\"%s\"}]'", match["index"], match["value"]))
 		}
 
