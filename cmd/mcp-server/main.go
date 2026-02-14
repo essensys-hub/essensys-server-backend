@@ -292,8 +292,15 @@ func main() {
 		// The handler returned by NewSSEServer should handle routing internally
 		// We mount it on both paths as configured with WithSSEEndpoint and WithMessageEndpoint
 		mux := http.NewServeMux()
-		mux.Handle("/sse", sseServer)
-		mux.Handle("/messages", sseServer)
+		
+		// Wrap handler to log all requests for debugging
+		loggingHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Printf("MCP Request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+			sseServer.ServeHTTP(w, r)
+		})
+		
+		mux.Handle("/sse", loggingHandler)
+		mux.Handle("/messages", loggingHandler)
 		
 		// Add a catch-all handler to log unhandled requests for debugging
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
