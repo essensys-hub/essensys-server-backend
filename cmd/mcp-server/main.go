@@ -280,14 +280,30 @@ func main() {
 	} else {
 		// SSE Mode
 		baseURL := fmt.Sprintf("http://localhost:%s", *port)
-		sseServer := server.NewSSEServer(s, server.WithBaseURL(baseURL))
+		// NewSSEServer returns a handler that implements the MCP Streamable HTTP spec
+		// The handler should handle both GET (SSE) and POST (messages) requests
+		sseServer := server.NewSSEServer(s, 
+			server.WithBaseURL(baseURL),
+			server.WithSSEEndpoint("/sse"),
+			server.WithMessageEndpoint("/messages"),
+		)
 		
-		// Setup Mux
+		// Setup Mux - mount the SSE server handler
+		// The handler returned by NewSSEServer should handle routing internally
+		// We mount it on both paths as configured with WithSSEEndpoint and WithMessageEndpoint
 		mux := http.NewServeMux()
 		mux.Handle("/sse", sseServer)
 		mux.Handle("/messages", sseServer)
+		
+		// Add a catch-all handler to log unhandled requests for debugging
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			log.Printf("Unhandled request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+			http.NotFound(w, r)
+		})
 
 		log.Printf("Starting MCP SSE server on port %s (Private IPs only)...", *port)
+		log.Printf("SSE endpoint: http://localhost:%s/sse (GET)", *port)
+		log.Printf("Messages endpoint: http://localhost:%s/messages (POST)", *port)
         
         // Chain middlewares: IP Check -> Auth Check -> Handler
         handler := authMiddleware(mux, *token)
