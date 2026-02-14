@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -26,6 +28,17 @@ var (
 
 // Redis Client
 var rdb *redis.Client
+
+// responseLogger wraps http.ResponseWriter to capture status code
+type responseLogger struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rl *responseLogger) WriteHeader(code int) {
+	rl.statusCode = code
+	rl.ResponseWriter.WriteHeader(code)
+}
 
 // IP Whitelist Middleware
 func privateIPMiddleware(next http.Handler) http.Handler {
@@ -148,14 +161,22 @@ func main() {
 			}
 		}
 
+		log.Printf("[MCP TOOL] read_exchange_table called with client_id=%s", clientID)
+		
 		key := fmt.Sprintf("essensys:client:%s:exchange", clientID)
+		log.Printf("[MCP TOOL] Reading Redis key: %s", key)
+		
 		vals, err := rdb.HGetAll(ctx, key).Result()
 		if err != nil {
+			log.Printf("[MCP TOOL] Redis error reading %s: %v", key, err)
 			return mcp.NewToolResultError(fmt.Sprintf("Redis error: %v", err)), nil
 		}
 
+		log.Printf("[MCP TOOL] Retrieved %d values from exchange table for client %s", len(vals), clientID)
 		jsonBytes, _ := json.Marshal(vals)
-		return mcp.NewToolResultText(string(jsonBytes)), nil
+		result := string(jsonBytes)
+		log.Printf("[MCP TOOL] read_exchange_table result: %s", result)
+		return mcp.NewToolResultText(result), nil
 	})
 
 	// Tool: read_exchange_value
@@ -171,6 +192,7 @@ func main() {
 		case map[string]interface{}:
 			args = v
 		default:
+			log.Printf("[MCP TOOL] read_exchange_value: Invalid arguments format")
 			return mcp.NewToolResultError("Invalid arguments format"), nil
 		}
 
@@ -180,19 +202,28 @@ func main() {
 
 		idxVal, ok := args["index"].(float64)
 		if !ok {
+			log.Printf("[MCP TOOL] read_exchange_value: Invalid index format")
 			return mcp.NewToolResultError("Invalid index format"), nil
 		}
 		index := int(idxVal)
 
+		log.Printf("[MCP TOOL] read_exchange_value called with client_id=%s, index=%d", clientID, index)
+
 		key := fmt.Sprintf("essensys:client:%s:exchange", clientID)
-		val, err := rdb.HGet(ctx, key, strconv.Itoa(index)).Result()
+		field := strconv.Itoa(index)
+		log.Printf("[MCP TOOL] Reading Redis key: %s, field: %s", key, field)
+		
+		val, err := rdb.HGet(ctx, key, field).Result()
 		if err == redis.Nil {
+			log.Printf("[MCP TOOL] Value not found at index %d for client %s", index, clientID)
 			return mcp.NewToolResultText(""), nil
 		}
 		if err != nil {
+			log.Printf("[MCP TOOL] Redis error reading %s[%s]: %v", key, field, err)
 			return mcp.NewToolResultError(fmt.Sprintf("Redis error: %v", err)), nil
 		}
 
+		log.Printf("[MCP TOOL] read_exchange_value result: index=%d, value=%s", index, val)
 		return mcp.NewToolResultText(val), nil
 	})
 
@@ -210,6 +241,7 @@ func main() {
 		case map[string]interface{}:
 			args = v
 		default:
+			log.Printf("[MCP TOOL] set_exchange_value: Invalid arguments format")
 			return mcp.NewToolResultError("Invalid arguments format"), nil
 		}
 
@@ -219,22 +251,32 @@ func main() {
 
 		idxVal, ok := args["index"].(float64)
 		if !ok {
+			log.Printf("[MCP TOOL] set_exchange_value: Invalid index format")
 			return mcp.NewToolResultError("Invalid index format"), nil
 		}
 		index := int(idxVal)
 
 		value, ok := args["value"].(string)
 		if !ok {
+			log.Printf("[MCP TOOL] set_exchange_value: Invalid value format")
 			return mcp.NewToolResultError("Invalid value format"), nil
 		}
 
+		log.Printf("[MCP TOOL] set_exchange_value called with client_id=%s, index=%d, value=%s", clientID, index, value)
+
 		key := fmt.Sprintf("essensys:client:%s:exchange", clientID)
-		err := rdb.HSet(ctx, key, strconv.Itoa(index), value).Err()
+		field := strconv.Itoa(index)
+		log.Printf("[MCP TOOL] Setting Redis key: %s, field: %s, value: %s", key, field, value)
+		
+		err := rdb.HSet(ctx, key, field, value).Err()
 		if err != nil {
+			log.Printf("[MCP TOOL] Redis error setting %s[%s]=%s: %v", key, field, value, err)
 			return mcp.NewToolResultError(fmt.Sprintf("Redis error: %v", err)), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Set index %d to '%s' for client %s", index, value, clientID)), nil
+		result := fmt.Sprintf("Set index %d to '%s' for client %s", index, value, clientID)
+		log.Printf("[MCP TOOL] set_exchange_value success: %s", result)
+		return mcp.NewToolResultText(result), nil
 	})
 
 	// Tool: send_order
@@ -250,6 +292,7 @@ func main() {
 		case map[string]interface{}:
 			args = v
 		default:
+			log.Printf("[MCP TOOL] send_order: Invalid arguments format")
 			return mcp.NewToolResultError("Invalid arguments format"), nil
 		}
 
@@ -262,22 +305,33 @@ func main() {
 
 		paramsStr, ok := args["params_json"].(string)
 		if !ok {
+			log.Printf("[MCP TOOL] send_order: Invalid params_json format")
 			return mcp.NewToolResultError("Invalid params_json format"), nil
 		}
 
+		log.Printf("[MCP TOOL] send_order called with guid=%s, params_json=%s", guid, paramsStr)
+
 		var rawParams interface{}
 		if err := json.Unmarshal([]byte(paramsStr), &rawParams); err != nil {
+			log.Printf("[MCP TOOL] send_order: Invalid JSON in params_json: %v", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Invalid JSON in params_json: %v", err)), nil
 		}
 
 		actionJSON := fmt.Sprintf(`{"guid":"%s","params":%s}`, guid, paramsStr)
+		log.Printf("[MCP TOOL] Generated action JSON: %s", actionJSON)
+		
 		key := "essensys:global:actions"
+		log.Printf("[MCP TOOL] Pushing to Redis queue: %s", key)
+		
 		err := rdb.RPush(ctx, key, actionJSON).Err()
 		if err != nil {
+			log.Printf("[MCP TOOL] Redis error pushing to %s: %v", key, err)
 			return mcp.NewToolResultError(fmt.Sprintf("Redis error: %v", err)), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Order sent with GUID %s", guid)), nil
+		result := fmt.Sprintf("Order sent with GUID %s", guid)
+		log.Printf("[MCP TOOL] send_order success: %s", result)
+		return mcp.NewToolResultText(result), nil
 	})
 
 	if *mode == "stdio" {
@@ -300,10 +354,49 @@ func main() {
 		// We mount it on both paths as configured with WithSSEEndpoint and WithMessageEndpoint
 		mux := http.NewServeMux()
 		
-		// Wrap handler to log all requests for debugging
+		// Wrap handler to log all requests with detailed information
 		loggingHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.Printf("MCP Request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
-			sseServer.ServeHTTP(w, r)
+			// Extract client IP
+			clientIP := r.RemoteAddr
+			if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+				parts := strings.Split(forwarded, ",")
+				clientIP = strings.TrimSpace(parts[0])
+			}
+			
+			// Log request details
+			log.Printf("[MCP HTTP] %s %s from %s", r.Method, r.URL.Path, clientIP)
+			log.Printf("[MCP HTTP] Headers: User-Agent=%s, Content-Type=%s, Content-Length=%s", 
+				r.Header.Get("User-Agent"), r.Header.Get("Content-Type"), r.Header.Get("Content-Length"))
+			
+			// For POST requests, log the body
+			if r.Method == "POST" && r.Body != nil {
+				bodyBytes, err := io.ReadAll(r.Body)
+				if err == nil && len(bodyBytes) > 0 {
+					// Restore body for handler
+					r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+					
+					// Try to parse as JSON for better logging
+					var jsonData interface{}
+					if err := json.Unmarshal(bodyBytes, &jsonData); err == nil {
+						jsonPretty, _ := json.MarshalIndent(jsonData, "", "  ")
+						log.Printf("[MCP HTTP] Request body (JSON):\n%s", string(jsonPretty))
+					} else {
+						log.Printf("[MCP HTTP] Request body (raw): %s", string(bodyBytes))
+					}
+				}
+			}
+			
+			// Wrap response writer to capture status code and response
+			responseWriter := &responseLogger{
+				ResponseWriter: w,
+				statusCode:     200,
+			}
+			
+			startTime := time.Now()
+			sseServer.ServeHTTP(responseWriter, r)
+			duration := time.Since(startTime)
+			
+			log.Printf("[MCP HTTP] Response: %s %s -> %d (%v)", r.Method, r.URL.Path, responseWriter.statusCode, duration)
 		})
 		
 		mux.Handle("/sse", loggingHandler)
