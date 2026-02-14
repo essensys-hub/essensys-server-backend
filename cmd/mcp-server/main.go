@@ -17,6 +17,13 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// Version variables - set at build time via ldflags
+var (
+	version   = "dev"
+	buildTime = "unknown"
+	gitCommit = "unknown"
+)
+
 // Redis Client
 var rdb *redis.Client
 
@@ -308,6 +315,12 @@ func main() {
 			http.NotFound(w, r)
 		})
 
+		log.Printf("===========================================")
+		log.Printf("Essensys MCP Server")
+		log.Printf("Version: %s", version)
+		log.Printf("Build time: %s", buildTime)
+		log.Printf("Git commit: %s", gitCommit)
+		log.Printf("===========================================")
 		log.Printf("Starting MCP SSE server on port %s (Private IPs only)...", *port)
 		log.Printf("SSE endpoint: http://localhost:%s/sse (GET)", *port)
 		log.Printf("Messages endpoint: http://localhost:%s/messages (POST)", *port)
