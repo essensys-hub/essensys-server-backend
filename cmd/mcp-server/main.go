@@ -123,6 +123,7 @@ func deriveOppositeAction(index int, value, action, category string) (int, strin
 
 const essensysSkillMarkdown = `---
 name: essensys-quick-commands
+version: 2026.01.30.1
 description: Explains Essensys backend flow and fast command patterns to avoid repeated long exchanges about the reference table. Use when the user asks to control lights/shutters/scenarios and when ON/OFF may use different indices.
 ---
 
@@ -175,27 +176,43 @@ Shutters:
 - fermer indexes: 620..622 (often OPEN index + 3)
 `
 
-func installEssensysSkillPack(targetDir string) (string, string, error) {
+const essensysSkillPackVersion = "2026.01.30.1"
+
+func installEssensysSkillPack(targetDir string) (string, string, string, error) {
 	cleanDir := filepath.Clean(strings.TrimSpace(targetDir))
 	if cleanDir == "" || cleanDir == "." {
 		cleanDir = ".cursor/skills/essensys-quick-commands"
 	}
 
 	if err := os.MkdirAll(cleanDir, 0o755); err != nil {
-		return "", "", fmt.Errorf("failed to create skill directory: %w", err)
+		return "", "", "", fmt.Errorf("failed to create skill directory: %w", err)
 	}
 
 	skillPath := filepath.Join(cleanDir, "SKILL.md")
 	refPath := filepath.Join(cleanDir, "reference.md")
+	manifestPath := filepath.Join(cleanDir, "skill-manifest.json")
 
 	if err := os.WriteFile(skillPath, []byte(essensysSkillMarkdown), 0o644); err != nil {
-		return "", "", fmt.Errorf("failed to write SKILL.md: %w", err)
+		return "", "", "", fmt.Errorf("failed to write SKILL.md: %w", err)
 	}
 	if err := os.WriteFile(refPath, []byte(essensysSkillReferenceMarkdown), 0o644); err != nil {
-		return "", "", fmt.Errorf("failed to write reference.md: %w", err)
+		return "", "", "", fmt.Errorf("failed to write reference.md: %w", err)
 	}
 
-	return skillPath, refPath, nil
+	manifestBytes, err := json.MarshalIndent(map[string]string{
+		"name":         "essensys-quick-commands",
+		"version":      essensysSkillPackVersion,
+		"updated_at":   time.Now().UTC().Format(time.RFC3339),
+		"generated_by": "download_essensys_skill",
+	}, "", "  ")
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to build skill manifest: %w", err)
+	}
+	if err := os.WriteFile(manifestPath, manifestBytes, 0o644); err != nil {
+		return "", "", "", fmt.Errorf("failed to write skill-manifest.json: %w", err)
+	}
+
+	return skillPath, refPath, manifestPath, nil
 }
 
 // IP Whitelist Middleware
@@ -692,13 +709,13 @@ func main() {
 		}
 
 		log.Printf("[MCP TOOL] download_essensys_skill called with target_dir=%s", targetDir)
-		skillPath, refPath, err := installEssensysSkillPack(targetDir)
+		skillPath, refPath, manifestPath, err := installEssensysSkillPack(targetDir)
 		if err != nil {
 			log.Printf("[MCP TOOL] download_essensys_skill error: %v", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to generate Essensys skill pack: %v", err)), nil
 		}
 
-		result := fmt.Sprintf("Essensys skill pack generated.\n- SKILL.md: %s\n- reference.md: %s\n\nNext step: load this skill in your agent environment to reduce repeated tool calls and long reference-table explanations.", skillPath, refPath)
+		result := fmt.Sprintf("Essensys skill pack generated.\n- Version: %s\n- SKILL.md: %s\n- reference.md: %s\n- skill-manifest.json: %s\n\nNext step: load this skill in your agent environment to reduce repeated tool calls and long reference-table explanations.", essensysSkillPackVersion, skillPath, refPath, manifestPath)
 		log.Printf("[MCP TOOL] download_essensys_skill success: %s", result)
 		return mcp.NewToolResultText(result), nil
 	})
