@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -38,6 +39,46 @@ type responseLogger struct {
 func (rl *responseLogger) WriteHeader(code int) {
 	rl.statusCode = code
 	rl.ResponseWriter.WriteHeader(code)
+}
+
+type exchangeKV struct {
+	K int    `json:"k"`
+	V string `json:"v"`
+}
+
+func expandLegacyScenarioBlock(params []exchangeKV) []exchangeKV {
+	hasLightShutterIndex := false
+	for _, p := range params {
+		if p.K >= 605 && p.K <= 622 {
+			hasLightShutterIndex = true
+			break
+		}
+	}
+	if !hasLightShutterIndex {
+		return params
+	}
+
+	byIndex := make(map[int]string)
+	for _, p := range params {
+		byIndex[p.K] = p.V
+	}
+
+	// BP_MQX_ETH expects full scenario trigger + complete 605..622 block.
+	if _, exists := byIndex[590]; !exists {
+		byIndex[590] = "1"
+	}
+	for i := 605; i <= 622; i++ {
+		if _, exists := byIndex[i]; !exists {
+			byIndex[i] = "0"
+		}
+	}
+
+	out := make([]exchangeKV, 0, len(byIndex))
+	for k, v := range byIndex {
+		out = append(out, exchangeKV{K: k, V: v})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].K < out[j].K })
+	return out
 }
 
 // IP Whitelist Middleware
@@ -534,6 +575,19 @@ func main() {
 		if err := json.Unmarshal([]byte(paramsStr), &rawParams); err != nil {
 			log.Printf("[MCP TOOL] send_order: Invalid JSON in params_json: %v", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Invalid JSON in params_json: %v", err)), nil
+		}
+
+		var params []exchangeKV
+		if err := json.Unmarshal([]byte(paramsStr), &params); err != nil {
+			log.Printf("[MCP TOOL] send_order: params_json must be an array of {k,v}: %v", err)
+			return mcp.NewToolResultError(fmt.Sprintf("params_json must be an array of {k,v}: %v", err)), nil
+		}
+
+		expanded := expandLegacyScenarioBlock(params)
+		if len(expanded) != len(params) {
+			expandedJSON, _ := json.Marshal(expanded)
+			paramsStr = string(expandedJSON)
+			log.Printf("[MCP TOOL] send_order expanded legacy block to: %s", paramsStr)
 		}
 
 		actionJSON := fmt.Sprintf(`{"guid":"%s","params":%s}`, guid, paramsStr)
