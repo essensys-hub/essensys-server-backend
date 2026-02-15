@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -121,21 +122,29 @@ func deriveOppositeAction(index int, value, action, category string) (int, strin
 
 const essensysSkillMarkdown = `---
 name: essensys-quick-commands
-version: 2026.01.30.1
-description: Explains Essensys backend flow and fast command patterns to avoid repeated long exchanges about the reference table. Use when the user asks to control lights/shutters/scenarios and when ON/OFF may use different indices.
+version: 2026.02.15.1
+description: Explains Essensys backend flow, fast control commands, and operational diagnostics/repair tools. Use when controlling devices or diagnosing backend/services/ports.
 ---
 
 # Essensys Quick Commands
 
 ## Goal
 
-Respond fast with minimal tool calls by using direct command patterns for common actions.
+Respond fast with minimal tool calls for control and diagnostics.
 
 ## Fast flow
 
 1. Use find_device_index with device_name (+ category/action when possible).
 2. Use send_order with returned index/value.
 3. Let send_order auto-expand legacy block (590 + 605..622) when needed.
+
+## Ops diagnostic flow
+
+1. list_service_status
+2. get_port_diagnostics
+3. get_system_metrics
+4. read_service_logs (if needed)
+5. run_self_diagnostic (optionally auto_repair=true)
 
 ## Important rule
 
@@ -149,6 +158,7 @@ Example:
 
 - Keep answers short.
 - Return: Cause, Technical proof (index/value), and exact command to run.
+- For incidents: return Diagnostic summary -> Actions applied -> Remaining risks.
 `
 
 const essensysSkillReferenceMarkdown = `# Essensys quick reference
@@ -172,9 +182,71 @@ Lights:
 Shutters:
 - ouvrir indexes: 617..619
 - fermer indexes: 620..622 (often OPEN index + 3)
+
+## MCP tools
+
+Control:
+- read_exchange_table
+- read_exchange_value
+- set_exchange_value (debug only)
+- find_device_index
+- send_order
+
+Diagnostics / self-heal:
+- list_service_status
+- read_service_logs
+- restart_service
+- get_port_diagnostics
+- get_system_metrics
+- run_self_diagnostic
+
+Skill bootstrap:
+- download_essensys_skill
 `
 
-const essensysSkillPackVersion = "2026.01.30.1"
+const essensysSkillPackVersion = "2026.02.15.1"
+
+var allowedOpsServices = map[string]bool{
+	"essensys-backend":    true,
+	"essensys-mcp":        true,
+	"nginx":               true,
+	"traefik":             true,
+	"redis-server":        true,
+	"AdGuardHome":         true,
+	"essensys-push.timer": true,
+	"mosquitto":           true,
+}
+
+func runCommand(timeout time.Duration, name string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	out, err := cmd.CombinedOutput()
+	outStr := strings.TrimSpace(string(out))
+	if ctx.Err() == context.DeadlineExceeded {
+		return outStr, fmt.Errorf("command timeout")
+	}
+	if err != nil {
+		if outStr == "" {
+			return "", err
+		}
+		return outStr, fmt.Errorf("%v: %s", err, outStr)
+	}
+	return outStr, nil
+}
+
+func serviceState(serviceName string) (string, string, error) {
+	active, _ := runCommand(3*time.Second, "systemctl", "is-active", serviceName)
+	enabled, _ := runCommand(3*time.Second, "systemctl", "is-enabled", serviceName)
+	if active == "" {
+		active = "unknown"
+	}
+	if enabled == "" {
+		enabled = "unknown"
+	}
+	return active, enabled, nil
+}
 
 func buildEssensysSkillPackJSON() (string, error) {
 	manifestObj := map[string]string{
@@ -702,6 +774,253 @@ func main() {
 
 		log.Printf("[MCP TOOL] download_essensys_skill success: version=%s payload_size=%d", essensysSkillPackVersion, len(payloadJSON))
 		return mcp.NewToolResultText(payloadJSON), nil
+	})
+
+	// Tool: list_service_status
+	s.AddTool(mcp.NewTool("list_service_status",
+		mcp.WithDescription("List status of Essensys-related services for operations diagnostics."),
+		mcp.WithString("service_name", mcp.Description("Optional single service name filter (e.g. 'essensys-backend', 'essensys-mcp', 'nginx', 'traefik').")),
+	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args map[string]interface{}
+		if v, ok := request.Params.Arguments.(map[string]interface{}); ok {
+			args = v
+		} else {
+			args = map[string]interface{}{}
+		}
+
+		var services []string
+		if rawName, ok := args["service_name"].(string); ok && strings.TrimSpace(rawName) != "" {
+			rawName = strings.TrimSpace(rawName)
+			if !allowedOpsServices[rawName] {
+				return mcp.NewToolResultError(fmt.Sprintf("service '%s' is not allowed", rawName)), nil
+			}
+			services = []string{rawName}
+		} else {
+			for svc := range allowedOpsServices {
+				services = append(services, svc)
+			}
+			sort.Strings(services)
+		}
+
+		result := map[string]interface{}{
+			"services": []map[string]string{},
+		}
+		serviceRows := make([]map[string]string, 0, len(services))
+		for _, svc := range services {
+			active, enabled, _ := serviceState(svc)
+			serviceRows = append(serviceRows, map[string]string{
+				"name":    svc,
+				"active":  active,
+				"enabled": enabled,
+			})
+		}
+		result["services"] = serviceRows
+		jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+		return mcp.NewToolResultText(string(jsonBytes)), nil
+	})
+
+	// Tool: restart_service
+	s.AddTool(mcp.NewTool("restart_service",
+		mcp.WithDescription("Restart an allowed Essensys service for self-healing operations."),
+		mcp.WithString("service_name", mcp.Required(), mcp.Description("Service name to restart (allowed: essensys-backend, essensys-mcp, nginx, traefik, redis-server, AdGuardHome, essensys-push.timer, mosquitto).")),
+	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args, ok := request.Params.Arguments.(map[string]interface{})
+		if !ok {
+			return mcp.NewToolResultError("Invalid arguments format"), nil
+		}
+		serviceName, ok := args["service_name"].(string)
+		if !ok || strings.TrimSpace(serviceName) == "" {
+			return mcp.NewToolResultError("service_name is required"), nil
+		}
+		serviceName = strings.TrimSpace(serviceName)
+		if !allowedOpsServices[serviceName] {
+			return mcp.NewToolResultError(fmt.Sprintf("service '%s' is not allowed", serviceName)), nil
+		}
+
+		if _, err := runCommand(15*time.Second, "systemctl", "restart", serviceName); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to restart %s: %v", serviceName, err)), nil
+		}
+		active, enabled, _ := serviceState(serviceName)
+		result := map[string]string{
+			"service": serviceName,
+			"active":  active,
+			"enabled": enabled,
+			"status":  "restarted",
+		}
+		jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+		return mcp.NewToolResultText(string(jsonBytes)), nil
+	})
+
+	// Tool: read_service_logs
+	s.AddTool(mcp.NewTool("read_service_logs",
+		mcp.WithDescription("Read recent journal logs of an allowed service."),
+		mcp.WithString("service_name", mcp.Required(), mcp.Description("Service name (same allowlist as restart_service).")),
+		mcp.WithNumber("lines", mcp.Description("Number of lines to fetch (default 80, max 300).")),
+	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args, ok := request.Params.Arguments.(map[string]interface{})
+		if !ok {
+			return mcp.NewToolResultError("Invalid arguments format"), nil
+		}
+		serviceName, ok := args["service_name"].(string)
+		if !ok || strings.TrimSpace(serviceName) == "" {
+			return mcp.NewToolResultError("service_name is required"), nil
+		}
+		serviceName = strings.TrimSpace(serviceName)
+		if !allowedOpsServices[serviceName] {
+			return mcp.NewToolResultError(fmt.Sprintf("service '%s' is not allowed", serviceName)), nil
+		}
+
+		lines := 80
+		if raw, ok := args["lines"].(float64); ok {
+			lines = int(raw)
+		}
+		if lines < 1 {
+			lines = 1
+		}
+		if lines > 300 {
+			lines = 300
+		}
+
+		out, err := runCommand(8*time.Second, "journalctl", "-u", serviceName, "-n", strconv.Itoa(lines), "--no-pager")
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to read logs for %s: %v", serviceName, err)), nil
+		}
+		return mcp.NewToolResultText(out), nil
+	})
+
+	// Tool: get_port_diagnostics
+	s.AddTool(mcp.NewTool("get_port_diagnostics",
+		mcp.WithDescription("Get listening/connection diagnostics for common Essensys ports."),
+	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		_ = request
+		ports := []string{"80", "443", "7070", "8083", "6379"}
+		portRows := []map[string]string{}
+		for _, p := range ports {
+			out, _ := runCommand(5*time.Second, "ss", "-ltnp")
+			matches := []string{}
+			for _, line := range strings.Split(out, "\n") {
+				if strings.Contains(line, ":"+p+" ") || strings.HasSuffix(line, ":"+p) {
+					matches = append(matches, line)
+				}
+			}
+			state := "not_listening"
+			details := ""
+			if len(matches) > 0 {
+				state = "listening"
+				details = strings.Join(matches, "\n")
+			}
+			portRows = append(portRows, map[string]string{
+				"port":    p,
+				"state":   state,
+				"details": details,
+			})
+		}
+
+		establishedOut, _ := runCommand(5*time.Second, "sh", "-c", "ss -tnH state established '( dport = :80 or dport = :443 or dport = :7070 )' | wc -l")
+		result := map[string]interface{}{
+			"ports":               portRows,
+			"established_clients": strings.TrimSpace(establishedOut),
+		}
+		jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+		return mcp.NewToolResultText(string(jsonBytes)), nil
+	})
+
+	// Tool: get_system_metrics
+	s.AddTool(mcp.NewTool("get_system_metrics",
+		mcp.WithDescription("Collect quick runtime metrics used in monitor.py (cpu/memory/network/disk/client count)."),
+	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		_ = request
+		uptimeOut, _ := runCommand(5*time.Second, "uptime")
+		memOut, _ := runCommand(5*time.Second, "free", "-m")
+		diskOut, _ := runCommand(5*time.Second, "df", "-h", "/")
+		ifacesOut, _ := runCommand(5*time.Second, "ip", "-o", "-4", "addr", "show")
+		clientsOut, _ := runCommand(5*time.Second, "sh", "-c", "ss -tnH state established '( dport = :80 or dport = :443 or dport = :7070 )' | wc -l")
+
+		result := map[string]string{
+			"uptime":              uptimeOut,
+			"memory_mb":           memOut,
+			"disk_root":           diskOut,
+			"interfaces_ipv4":     ifacesOut,
+			"established_clients": strings.TrimSpace(clientsOut),
+		}
+		jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+		return mcp.NewToolResultText(string(jsonBytes)), nil
+	})
+
+	// Tool: run_self_diagnostic
+	s.AddTool(mcp.NewTool("run_self_diagnostic",
+		mcp.WithDescription("Run an executable self-diagnostic over core Essensys services and optionally apply automatic restarts."),
+		mcp.WithBoolean("auto_repair", mcp.Description("If true, restart inactive core services automatically.")),
+	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		autoRepair := false
+		if args, ok := request.Params.Arguments.(map[string]interface{}); ok {
+			if v, ok := args["auto_repair"].(bool); ok {
+				autoRepair = v
+			}
+		}
+
+		coreServices := []string{"essensys-backend", "essensys-mcp", "nginx", "traefik", "redis-server"}
+		type svcReport struct {
+			Name      string `json:"name"`
+			Active    string `json:"active"`
+			Enabled   string `json:"enabled"`
+			Repaired  bool   `json:"repaired"`
+			RepairErr string `json:"repair_error,omitempty"`
+		}
+		reports := []svcReport{}
+		appliedActions := []string{}
+		recommendations := []string{}
+
+		for _, svc := range coreServices {
+			active, enabled, _ := serviceState(svc)
+			rep := svcReport{Name: svc, Active: active, Enabled: enabled}
+			if autoRepair && active != "active" {
+				if _, err := runCommand(15*time.Second, "systemctl", "restart", svc); err != nil {
+					rep.RepairErr = err.Error()
+				} else {
+					rep.Repaired = true
+					appliedActions = append(appliedActions, "restarted "+svc)
+					active2, enabled2, _ := serviceState(svc)
+					rep.Active = active2
+					rep.Enabled = enabled2
+				}
+			}
+			if rep.Active != "active" {
+				recommendations = append(recommendations, fmt.Sprintf("service %s is %s; inspect logs with read_service_logs", svc, rep.Active))
+			}
+			reports = append(reports, rep)
+		}
+
+		redisPing := "ok"
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			redisPing = "error: " + err.Error()
+			recommendations = append(recommendations, "Redis ping failed; verify redis-server status and connectivity")
+		}
+
+		queueLen, qErr := rdb.LLen(ctx, "essensys:global:actions").Result()
+		queueInfo := fmt.Sprintf("%d", queueLen)
+		if qErr != nil {
+			queueInfo = "error: " + qErr.Error()
+			recommendations = append(recommendations, "Cannot read Redis global actions queue")
+		}
+
+		portDiagOut, _ := runCommand(5*time.Second, "ss", "-ltnp")
+		result := map[string]interface{}{
+			"auto_repair":      autoRepair,
+			"services":         reports,
+			"redis_ping":       redisPing,
+			"redis_queue_len":  queueInfo,
+			"port_snapshot":    portDiagOut,
+			"applied_actions":  appliedActions,
+			"recommendations":  recommendations,
+			"diagnostic_state": "ok",
+		}
+		if len(recommendations) > 0 {
+			result["diagnostic_state"] = "attention"
+		}
+
+		jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+		return mcp.NewToolResultText(string(jsonBytes)), nil
 	})
 
 	// Tool: send_order
