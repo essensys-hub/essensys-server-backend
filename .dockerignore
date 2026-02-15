@@ -1,0 +1,14 @@
+.git
+.gitignore
+*.md
+!README.md
+.kiro
+docs
+test
+simulation
+tools
+server
+essensys-mcp
+client-essensys-legacy
+config.yaml
+.DS_Store
