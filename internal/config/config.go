@@ -73,9 +73,19 @@ type LoggingConfig struct {
 	Format string `yaml:"format"`
 }
 
+// LoadFromFile loads configuration from a specific YAML file path
+// Environment variables take precedence over YAML file values
+func LoadFromFile(configPath string) (*Config, error) {
+	return loadConfig(configPath)
+}
+
 // Load loads configuration from environment variables and optionally a YAML file
 // Environment variables take precedence over YAML file values
 func Load() (*Config, error) {
+	return loadConfig("config.yaml")
+}
+
+func loadConfig(configFile string) (*Config, error) {
 	// Start with default configuration
 	cfg := &Config{
 		Server: ServerConfig{
@@ -121,8 +131,8 @@ func Load() (*Config, error) {
         },
 	}
 
-	// Try to load from config.yaml if it exists
-	if err := loadFromYAML(cfg, "config.yaml"); err != nil {
+	// Try to load from config file if it exists
+	if err := loadFromYAML(cfg, configFile); err != nil {
 		// Log but don't fail if config file doesn't exist
 		if !os.IsNotExist(err) {
 			log.Printf("Warning: error loading config.yaml: %v", err)

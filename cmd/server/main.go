@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -24,8 +25,17 @@ import (
 )
 
 func main() {
-	// Load configuration from environment variables and config.yaml
-	cfg, err := config.Load()
+	configFile := flag.String("config", "", "Path to config file (default: config.yaml in working directory)")
+	flag.Parse()
+
+	// Load configuration
+	var cfg *config.Config
+	var err error
+	if *configFile != "" {
+		cfg, err = config.LoadFromFile(*configFile)
+	} else {
+		cfg, err = config.Load()
+	}
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
