@@ -16,6 +16,7 @@ import (
 	"github.com/essensys-hub/essensys-server-backend/internal/config"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
+	"github.com/essensys-hub/essensys-server-backend/internal/metrics"
 	"github.com/essensys-hub/essensys-server-backend/internal/mqtt"
 	"github.com/essensys-hub/essensys-server-backend/internal/server"
 	"github.com/essensys-hub/essensys-server-backend/internal/unifi"
@@ -39,6 +40,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
+
+	// Initialize Prometheus metrics
+	metrics.Init("1.3.0")
 
 	// Log configuration
 	cfg.LogConfig()

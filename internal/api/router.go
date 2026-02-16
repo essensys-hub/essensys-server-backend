@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
+	"github.com/essensys-hub/essensys-server-backend/internal/metrics"
 	"github.com/essensys-hub/essensys-server-backend/internal/middleware"
 )
 
@@ -50,11 +51,12 @@ func NewRouter(handler *Handler, webHandler *WebHandler, unifiHandler *UniFiHand
 	mainMux.HandleFunc("/health", healthCheckHandler)
 	mainMux.HandleFunc("/debug", handler.GetDebug) // Debug interface (public/unauthenticated or strict if moved to apiMux)
     mainMux.HandleFunc("/debug/logs", handler.GetDebugLogs) // Pollable logs
-    mainMux.HandleFunc("/table_ref", handler.GetTableRef) // Redis Reference Table Dump
+	mainMux.HandleFunc("/table_ref", handler.GetTableRef) // Redis Reference Table Dump
+	mainMux.Handle("/metrics", metrics.Handler())
 
-	// Wire up middleware chain: Recovery → Logging → Routes
-	// The chain is applied in reverse order (innermost to outermost)
+	// Wire up middleware chain: Recovery → Logging → Metrics → Routes
 	var finalHandler http.Handler = mainMux
+	finalHandler = metrics.InstrumentHandler(finalHandler)
 	finalHandler = middleware.RequestLogger(finalHandler)
 	finalHandler = middleware.Recovery(finalHandler)
 
