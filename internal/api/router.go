@@ -19,6 +19,7 @@ func NewRouter(handler *Handler, webHandler *WebHandler, unifiHandler *UniFiHand
 	apiMux.HandleFunc("/api/myactions", handler.GetMyActions)
 	apiMux.HandleFunc("/api/done/", handler.PostDone)           // Trailing slash to match /api/done/{guid}
 	apiMux.HandleFunc("/api/admin/inject", handler.PostAdminInject) // Admin endpoint to inject actions
+	apiMux.HandleFunc("/api/admin/exchange", handler.GetAdminExchange) // Read back exchange table values (reported via mystatus)
 
     // Web Frontend Routes (if webHandler is provided)
     if webHandler != nil {

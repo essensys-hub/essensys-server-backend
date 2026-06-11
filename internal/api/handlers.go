@@ -15,6 +15,8 @@ import (
     "time"
     "fmt"
     "html/template"
+    "strconv"
+    "strings"
 )
 
 //go:embed debug.html
@@ -74,8 +76,15 @@ func (h *Handler) GetServerInfos(w http.ResponseWriter, r *http.Request) {
 	// 607: Lumière Escalier OFF
 	// 615: Lumière SDB2 ON
 	// 590: Trigger Scenario
+	// 566-585: Temps d'action des volets (secondes) — Volets_PDV/CHB/PDE_Temps
 	// Others: Various system indices
-	indices := []int{613, 607, 615, 590, 349, 350, 351, 352, 363, 425, 426, 920, 567}
+	indices := []int{613, 607, 615, 590, 349, 350, 351, 352, 363, 425, 426, 920,
+		// Volets PDV (566-572) : salon x3, salle à manger x2, bureau, volet store
+		566, 567, 568, 569, 570, 571, 572,
+		// Volets CHB (574-578) : grande chambre x2, petites chambres x3
+		574, 575, 576, 577, 578,
+		// Volets PDE (582-585) : cuisine x2, salle de bain, store terrasse
+		582, 583, 584, 585}
 
 	// Build response
 	// isconnected: always true (client is connected if it's making this request)
@@ -277,6 +286,47 @@ func (h *Handler) PostAdminInject(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json ;charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
+}
+
+// GetAdminExchange handles GET /api/admin/exchange?keys=566,567,568
+// Returns the last known values of the requested exchange table indices,
+// as reported by the firmware via POST /api/mystatus.
+// Indices never reported by the firmware are omitted from the response.
+func (h *Handler) GetAdminExchange(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	clientID, ok := middleware.GetClientID(r)
+	if !ok {
+		clientID = "default"
+	}
+
+	keysParam := r.URL.Query().Get("keys")
+	if keysParam == "" {
+		http.Error(w, "Missing 'keys' query parameter (e.g. ?keys=566,567)", http.StatusBadRequest)
+		return
+	}
+
+	var indices []int
+	for _, part := range strings.Split(keysParam, ",") {
+		k, err := strconv.Atoi(strings.TrimSpace(part))
+		if err != nil {
+			http.Error(w, "Invalid index in 'keys': "+part, http.StatusBadRequest)
+			return
+		}
+		indices = append(indices, k)
+	}
+
+	values := h.store.GetAllValues(clientID, indices)
+	if values == nil {
+		values = []protocol.ExchangeKV{}
+	}
+
+	w.Header().Set("Content-Type", "application/json ;charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{"values": values})
 }
 
 // GetDebug handles GET /debug
