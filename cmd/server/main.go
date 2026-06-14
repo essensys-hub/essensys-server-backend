@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/essensys-hub/essensys-server-backend/internal/api"
 	"github.com/essensys-hub/essensys-server-backend/internal/auth"
+	"github.com/essensys-hub/essensys-server-backend/internal/cloudsync"
 	"github.com/essensys-hub/essensys-server-backend/internal/config"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
@@ -124,6 +126,19 @@ func main() {
 	// Initialize handler
 	handler := api.NewHandler(actionService, statusService, store)
 
+	// Cloud hub sync (optional — outbound HTTPS to mon.essensys.fr)
+	cloudCtx, cloudCancel := context.WithCancel(context.Background())
+	cloudsync.NewAgent(cloudsync.Config{
+		Enabled:             cfg.Cloud.Enabled,
+		HubURL:              cfg.Cloud.HubURL,
+		GatewayID:           cfg.Cloud.GatewayID,
+		GatewayToken:        cfg.Cloud.GatewayToken,
+		PollIntervalSeconds: cfg.Cloud.PollIntervalSeconds,
+		ClientID:            cfg.Cloud.ClientID,
+		Eth0MAC:             cfg.Cloud.Eth0MAC,
+		Eth1MAC:             cfg.Cloud.Eth1MAC,
+	}, actionService).Start(cloudCtx)
+
     // Initialize SessionStore
     sessionStore := auth.NewSessionStore()
 
@@ -202,6 +217,7 @@ func main() {
 	case sig := <-shutdown:
 		log.Printf("Received shutdown signal: %v", sig)
 		log.Println("Starting graceful shutdown...")
+		cloudCancel()
 
 		// Close the listener to stop accepting new connections
 		if err := listener.Close(); err != nil {

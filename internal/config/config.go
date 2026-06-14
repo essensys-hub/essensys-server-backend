@@ -20,6 +20,19 @@ type Config struct {
     Database DatabaseConfig `yaml:"database"`
     MQTT    MQTTConfig    `yaml:"mqtt"`
     UniFi   UniFiConfig   `yaml:"unifi"`
+    Cloud   CloudConfig   `yaml:"cloud"`
+}
+
+type CloudConfig struct {
+    Enabled             bool   `yaml:"enabled"`
+    HubURL              string `yaml:"hub_url"`
+    GatewayID           string `yaml:"gateway_id"`
+    GatewayToken        string `yaml:"gateway_token"`
+    PollIntervalSeconds int    `yaml:"poll_interval_seconds"`
+    ClientID            string `yaml:"client_id"`
+    MachineID           int    `yaml:"machine_id"`
+    Eth0MAC             string `yaml:"eth0_mac"`
+    Eth1MAC             string `yaml:"eth1_mac"`
 }
 
 type RedisConfig struct {
@@ -128,6 +141,11 @@ func loadConfig(configFile string) (*Config, error) {
             APIKey:   "",
             Username: "",
             Password: "",
+        },
+        Cloud: CloudConfig{
+            Enabled:             false,
+            HubURL:              "https://mon.essensys.fr",
+            PollIntervalSeconds: 5,
         },
 	}
 

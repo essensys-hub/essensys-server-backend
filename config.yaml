@@ -28,3 +28,14 @@ logging:
   
   # Log format: text or json
   format: text
+
+cloud:
+  enabled: false
+  hub_url: "https://mon.essensys.fr"
+  gateway_id: ""
+  gateway_token: ""
+  poll_interval_seconds: 5
+  client_id: "default"
+  machine_id: 0
+  eth0_mac: ""
+  eth1_mac: ""
