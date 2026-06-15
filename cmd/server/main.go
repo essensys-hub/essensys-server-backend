@@ -137,7 +137,7 @@ func main() {
 		ClientID:            cfg.Cloud.ClientID,
 		Eth0MAC:             cfg.Cloud.Eth0MAC,
 		Eth1MAC:             cfg.Cloud.Eth1MAC,
-	}, actionService).Start(cloudCtx)
+	}, actionService, store).Start(cloudCtx)
 
     // Initialize SessionStore
     sessionStore := auth.NewSessionStore()

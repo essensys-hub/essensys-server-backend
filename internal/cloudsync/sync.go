@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
+	"github.com/essensys-hub/essensys-server-backend/internal/data"
 	"github.com/essensys-hub/essensys-server-backend/pkg/protocol"
 )
 
@@ -38,15 +39,17 @@ type Agent struct {
 	cfg           Config
 	client        *http.Client
 	actionService *core.ActionService
+	store         data.Store
 }
 
-func NewAgent(cfg Config, actionService *core.ActionService) *Agent {
+func NewAgent(cfg Config, actionService *core.ActionService, store data.Store) *Agent {
 	return &Agent{
 		cfg: cfg,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 		actionService: actionService,
+		store:         store,
 	}
 }
 
@@ -73,12 +76,14 @@ func (a *Agent) Start(ctx context.Context) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		a.heartbeat(ctx)
+		a.pushExchange(ctx, clientID)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
 				a.pollAndApply(ctx, clientID)
+				a.pushExchange(ctx, clientID)
 				a.heartbeat(ctx)
 			}
 		}
@@ -162,6 +167,55 @@ func (a *Agent) heartbeat(ctx context.Context) {
 		return
 	}
 	res.Body.Close()
+}
+
+// exchangePushIndices lists exchange table keys synced to the cloud hub.
+// Includes scenario block (590, 605-622) and shutter travel times (566-585).
+func exchangePushIndices() []int {
+	indices := []int{590}
+	for i := 605; i <= 622; i++ {
+		indices = append(indices, i)
+	}
+	for i := 566; i <= 572; i++ {
+		indices = append(indices, i)
+	}
+	for i := 574; i <= 578; i++ {
+		indices = append(indices, i)
+	}
+	for i := 582; i <= 585; i++ {
+		indices = append(indices, i)
+	}
+	return indices
+}
+
+func (a *Agent) pushExchange(ctx context.Context, clientID string) {
+	if a.store == nil {
+		return
+	}
+	vals := a.store.GetAllValues(clientID, exchangePushIndices())
+	if len(vals) == 0 {
+		return
+	}
+	body, err := json.Marshal(map[string]any{"keys": vals})
+	if err != nil {
+		return
+	}
+	url := strings.TrimRight(a.cfg.HubURL, "/") + "/api/gateway/exchange"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	a.setGatewayHeaders(req)
+	req.Header.Set("Content-Type", "application/json")
+	res, err := a.client.Do(req)
+	if err != nil {
+		log.Printf("[cloudsync] exchange push: %v", err)
+		return
+	}
+	res.Body.Close()
+	if res.StatusCode == http.StatusUnauthorized {
+		log.Printf("[cloudsync] exchange push unauthorized")
+	}
 }
 
 func (a *Agent) setGatewayHeaders(req *http.Request) {
