@@ -806,7 +806,7 @@ AUTH_ENABLED=false ./server
 curl -u client1:pass1 http://localhost/api/serverinfos
 
 # Basic Auth with explicit header
-curl -H "Authorization: Basic Y2xpZW50MTpwYXNzMQ==" http://localhost/api/serverinfos
+curl -u client1:pass1 http://localhost/api/serverinfos
 
 # POST request with authentication
 curl -X POST http://localhost/api/mystatus \

@@ -20,7 +20,7 @@ NC='\033[0m' # No Color
 DB_HOST=${DB_HOST:-localhost}
 DB_PORT=${DB_PORT:-5432}
 DB_USER=${DB_USER:-nrineau}
-DB_PASSWORD=${DB_PASSWORD:-W1304nr07}
+DB_PASSWORD=${DB_PASSWORD:?Définir DB_PASSWORD avant d'exécuter ce script}
 DB_NAME=${DB_NAME:-essensys_test}
 
 echo "Configuration de la base de données de test:"

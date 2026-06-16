@@ -71,12 +71,12 @@ From: 192.168.0.151:xxxxx
 ===========================================
 
 --- Headers ---
-Authorization: Basic dGVzdHVzZXI6dGVzdHBhc3M=
+Authorization: Basic <base64(username:password)>
 ...
 
 --- AUTHENTICATION TOKEN ---
-Authorization Header: Basic dGVzdHVzZXI6dGVzdHBhc3M=
-Base64 Encoded: dGVzdHVzZXI6dGVzdHBhc3M=
+Authorization Header: Basic <base64(username:password)>
+Base64 Encoded: <base64(username:password)>
 Decoded (username:password): testuser:testpass
 
 --- TOKEN BREAKDOWN ---

@@ -40,8 +40,8 @@ cd /Users/nrineau/ESSENSYS/essensys-server-backend
 ## Authentification
 
 Le script utilise l'authentification Basic Auth avec :
-- **Hashed Pkey** : `5e6e0e1ffd940ee5649cf65b1d7a4df8`
-- **Token** : `Basic NWU2ZTBlMWZmZDk0MGVlNTo2NDljZjY1YjFkN2E0ZGY4`
+- **Hashed Pkey** : `5e6e0e1ffd940ee5649cf65b1d7a4df8` (exemple de test)
+- **Token** : `Basic <base64(username:password)>` (calculé à partir du hashed_pkey)
 
 Le token est calculé en divisant le `hashed_pkey` en deux parties :
 - `username` = 16 premiers caractères hex

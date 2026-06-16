@@ -120,8 +120,8 @@ host: mon.essensys.fr
 Cache-Control: max-age=0
 Accept-Charset: ISO-8859-1,utf-8;q=0.7,*;q=0.3
 Content-Length: 156
-Authorization: Basic MTIzNDU2Nzg5MGFiY2RlZjpmZWRjYmEwOTg3NjU0MzIx
-MTIzNDU2Nzg5MGFiY2RlZjpmZWRjYmEwOTg3NjU0MzIx
+Authorization: Basic <base64(hex_username:hex_password)>
+<hex_username>:<hex_password>
 
 
 ```
