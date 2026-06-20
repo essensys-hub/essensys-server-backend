@@ -85,6 +85,10 @@ func (h *Handler) GetServerInfos(w http.ResponseWriter, r *http.Request) {
 		574, 575, 576, 577, 578,
 		// Volets PDE (582-585) : cuisine x2, salle de bain, store terrasse
 		582, 583, 584, 585}
+	// Planning chauffage (13–348) : NE PAS lister ici. Le firmware BP_MQX_ETH (099-37)
+	// accepte au maximum 30 indices dans serverinfos (Json.c → ERREUR_INFOS_NB_VALEURS_MAX).
+	// Au-delà, le cycle Ethernet s'arrête après GET serverinfos : pas de mystatus ni myactions.
+	// Écriture planning : POST /api/admin/inject (≤30 params/action). Lecture UI : exchange Redis.
 
 	// Build response
 	// isconnected: always true (client is connected if it's making this request)

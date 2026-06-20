@@ -170,7 +170,8 @@ func (a *Agent) heartbeat(ctx context.Context) {
 }
 
 // exchangePushIndices lists exchange table keys synced to the cloud hub.
-// Includes scenario block (590, 605-622) and shutter travel times (566-585).
+// Includes scenario block (590, 605-622), shutter travel times (566-585),
+// heating schedule (13-348) and immediate modes (349-352).
 func exchangePushIndices() []int {
 	indices := []int{590}
 	for i := 605; i <= 622; i++ {
@@ -183,6 +184,12 @@ func exchangePushIndices() []int {
 		indices = append(indices, i)
 	}
 	for i := 582; i <= 585; i++ {
+		indices = append(indices, i)
+	}
+	for i := 13; i <= 348; i++ {
+		indices = append(indices, i)
+	}
+	for i := 349; i <= 352; i++ {
 		indices = append(indices, i)
 	}
 	return indices

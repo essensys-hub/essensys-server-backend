@@ -48,6 +48,9 @@ func TestGetServerInfos(t *testing.T) {
 	if response.Infos == nil {
 		t.Error("Expected Infos to be non-nil")
 	}
+	if len(response.Infos) > 30 {
+		t.Errorf("serverinfos must have ≤30 indices for firmware BP_MQX_ETH, got %d", len(response.Infos))
+	}
 }
 
 func TestPostMyStatus(t *testing.T) {
