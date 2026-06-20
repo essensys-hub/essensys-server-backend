@@ -15,7 +15,7 @@ func TestRouter_HealthCheck(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store)
+	handler := NewHandler(actionService, statusService, store, nil, nil)
 
 	// Create router with empty credentials (health check doesn't need auth)
 	router := NewRouter(handler, map[string]string{}, false)
@@ -44,7 +44,7 @@ func TestRouter_AuthenticationRequired(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store)
+	handler := NewHandler(actionService, statusService, store, nil, nil)
 
 	// Create router with credentials
 	validCredentials := map[string]string{
@@ -79,7 +79,7 @@ func TestRouter_ValidAuthentication(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store)
+	handler := NewHandler(actionService, statusService, store, nil, nil)
 
 	// Create router with credentials
 	validCredentials := map[string]string{
@@ -108,7 +108,7 @@ func TestRouter_MiddlewareChain(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store)
+	handler := NewHandler(actionService, statusService, store, nil, nil)
 
 	// Create router
 	validCredentials := map[string]string{
@@ -141,7 +141,7 @@ func TestRouter_AuthenticationDisabled(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store)
+	handler := NewHandler(actionService, statusService, store, nil, nil)
 
 	// Create router with authentication disabled
 	router := NewRouter(handler, map[string]string{}, false)

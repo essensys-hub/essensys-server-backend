@@ -9,4 +9,6 @@ const (
 	IndexLightEnd = 622
 	// MaxExchangeIndex is the maximum valid index
 	MaxExchangeIndex = 999
+	// MaxParamsPerFirmwareAction is the BP_MQX_ETH limit (Json.c / sc_TraitementAction).
+	MaxParamsPerFirmwareAction = 30
 )

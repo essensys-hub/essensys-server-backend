@@ -123,21 +123,27 @@ func main() {
 		log.Println("Initialized Archiver Service (10m interval)")
 	}
 
+	// Initialize shared exchange pull scheduler (LAN manual sync + cloud scheduled sync).
+	pullScheduler := core.NewExchangePullScheduler()
+
+	cloudAgent := cloudsync.NewAgent(cloudsync.Config{
+		Enabled:              cfg.Cloud.Enabled,
+		HubURL:               cfg.Cloud.HubURL,
+		GatewayID:            cfg.Cloud.GatewayID,
+		GatewayToken:         cfg.Cloud.GatewayToken,
+		PollIntervalSeconds:  cfg.Cloud.PollIntervalSeconds,
+		ClientID:             cfg.Cloud.ClientID,
+		Eth0MAC:              cfg.Cloud.Eth0MAC,
+		Eth1MAC:              cfg.Cloud.Eth1MAC,
+		ScheduledSyncEnabled: cfg.Cloud.ScheduledSyncEnabled,
+	}, actionService, store, pullScheduler)
+
 	// Initialize handler
-	handler := api.NewHandler(actionService, statusService, store)
+	handler := api.NewHandler(actionService, statusService, store, pullScheduler, cloudAgent)
 
 	// Cloud hub sync (optional — outbound HTTPS to mon.essensys.fr)
 	cloudCtx, cloudCancel := context.WithCancel(context.Background())
-	cloudsync.NewAgent(cloudsync.Config{
-		Enabled:             cfg.Cloud.Enabled,
-		HubURL:              cfg.Cloud.HubURL,
-		GatewayID:           cfg.Cloud.GatewayID,
-		GatewayToken:        cfg.Cloud.GatewayToken,
-		PollIntervalSeconds: cfg.Cloud.PollIntervalSeconds,
-		ClientID:            cfg.Cloud.ClientID,
-		Eth0MAC:             cfg.Cloud.Eth0MAC,
-		Eth1MAC:             cfg.Cloud.Eth1MAC,
-	}, actionService, store).Start(cloudCtx)
+	cloudAgent.Start(cloudCtx)
 
     // Initialize SessionStore
     sessionStore := auth.NewSessionStore()

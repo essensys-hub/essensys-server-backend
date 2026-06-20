@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/essensys-hub/essensys-server-backend/internal/cloudsync"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
 	"github.com/essensys-hub/essensys-server-backend/internal/middleware"
@@ -57,43 +58,43 @@ type Handler struct {
 	actionService *core.ActionService
 	statusService *core.StatusService
 	store         data.Store
+	heatingSync   *core.HeatingSyncManager
+	cloudAgent    *cloudsync.Agent
 }
 
-// NewHandler creates a new Handler instance
-func NewHandler(actionService *core.ActionService, statusService *core.StatusService, store data.Store) *Handler {
+// NewHandler creates a new Handler instance.
+// pullScheduler must be shared with cloudsync.Agent when cloud sync is enabled.
+func NewHandler(actionService *core.ActionService, statusService *core.StatusService, store data.Store, pullScheduler *core.ExchangePullScheduler, cloudAgent *cloudsync.Agent) *Handler {
+	if pullScheduler == nil {
+		pullScheduler = core.NewExchangePullScheduler()
+	}
 	return &Handler{
 		actionService: actionService,
 		statusService: statusService,
 		store:         store,
+		heatingSync:   pullScheduler,
+		cloudAgent:    cloudAgent,
 	}
+}
+
+func defaultServerInfoIndices() []int {
+	return []int{613, 607, 615, 590, 349, 350, 351, 352, 363, 425, 426, 920,
+		566, 567, 568, 569, 570, 571, 572,
+		574, 575, 576, 577, 578,
+		582, 583, 584, 585}
 }
 
 // GetServerInfos handles GET /api/serverinfos
 func (h *Handler) GetServerInfos(w http.ResponseWriter, r *http.Request) {
-	// Indices requested by the server from the client
-	// These are the indices the server wants the client to report in mystatus
-	// 613: Lumière Escalier ON
-	// 607: Lumière Escalier OFF
-	// 615: Lumière SDB2 ON
-	// 590: Trigger Scenario
-	// 566-585: Temps d'action des volets (secondes) — Volets_PDV/CHB/PDE_Temps
-	// Others: Various system indices
-	indices := []int{613, 607, 615, 590, 349, 350, 351, 352, 363, 425, 426, 920,
-		// Volets PDV (566-572) : salon x3, salle à manger x2, bureau, volet store
-		566, 567, 568, 569, 570, 571, 572,
-		// Volets CHB (574-578) : grande chambre x2, petites chambres x3
-		574, 575, 576, 577, 578,
-		// Volets PDE (582-585) : cuisine x2, salle de bain, store terrasse
-		582, 583, 584, 585}
-	// Planning chauffage (13–348) : NE PAS lister ici. Le firmware BP_MQX_ETH (099-37)
-	// accepte au maximum 30 indices dans serverinfos (Json.c → ERREUR_INFOS_NB_VALEURS_MAX).
-	// Au-delà, le cycle Ethernet s'arrête après GET serverinfos : pas de mystatus ni myactions.
-	// Écriture planning : POST /api/admin/inject (≤30 params/action). Lecture UI : exchange Redis.
+	indices := defaultServerInfoIndices()
+	if chunk, ok := h.heatingSync.CurrentChunk(); ok {
+		indices = chunk
+		addDebugLog("Heating sync serverinfos chunk: %v", indices)
+		h.heatingSync.Advance()
+	}
+	// Planning chauffage (13–348) : rotation via POST /api/admin/heating/sync uniquement.
+	// Liste fixe ≤30 indices sinon firmware BP_MQX_ETH bloque le cycle Ethernet.
 
-	// Build response
-	// isconnected: always true (client is connected if it's making this request)
-	// infos: list of indices the server wants from the client
-	// newversion: "no" means no firmware update available
 	response := protocol.ServerInfoResponse{
 		IsConnected: true,
 		Infos:       indices,
@@ -270,20 +271,19 @@ func (h *Handler) PostAdminInject(w http.ResponseWriter, r *http.Request) {
 		params = []protocol.ExchangeKV{singleParam}
 	}
 
-	// Process the action using ActionService
-	// This will handle complete block generation, bitwise fusion, etc.
-	guid, err := h.actionService.AddAction(clientID, params)
+	// Process the action using ActionService (auto-split >30 params for firmware).
+	guids, err := h.actionService.AddActions(clientID, params)
 	if err != nil {
 		http.Error(w, "Failed to add action", http.StatusInternalServerError)
 		return
 	}
-    
-    addDebugLog("Injected action: %s (Params: %v)", guid, params)
 
-	// Build response
-	response := map[string]string{
+	addDebugLog("Injected %d action(s): %v", len(guids), guids)
+
+	response := map[string]any{
 		"status": "ok",
-		"guid":   guid,
+		"guid":   guids[0],
+		"guids":  guids,
 	}
 
 	// Set Content-Type header with space before semicolon
@@ -331,6 +331,103 @@ func (h *Handler) GetAdminExchange(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json ;charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{"values": values})
+}
+
+type heatingSyncRequest struct {
+	StartIndex int `json:"startIndex"`
+	ByteCount  int `json:"byteCount"`
+}
+
+// PostAdminHeatingSync starts a rotating serverinfos read for one planning zone (≤30 indices/cycle).
+func (h *Handler) PostAdminHeatingSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req heatingSyncRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if req.ByteCount <= 0 || req.ByteCount > 336 {
+		http.Error(w, "byteCount must be 1..336", http.StatusBadRequest)
+		return
+	}
+
+	chunks, ok := h.heatingSync.TryStart(req.StartIndex, req.ByteCount)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json ;charset=UTF-8")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":  "pull already active",
+			"status": "busy",
+		})
+		return
+	}
+	addDebugLog("Heating sync started: %d..%d (%d chunks)", req.StartIndex, req.StartIndex+req.ByteCount-1, chunks)
+
+	clientID, ok := middleware.GetClientID(r)
+	if !ok {
+		clientID = "default"
+	}
+	status := h.heatingSync.Status(h.store, clientID, req.StartIndex, req.ByteCount)
+
+	w.Header().Set("Content-Type", "application/json ;charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "started",
+		"sync":   status,
+	})
+}
+
+// GetAdminHeatingSyncStatus reports how many planning octets are present in exchange Redis.
+func (h *Handler) GetAdminHeatingSyncStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	startIndex, err := strconv.Atoi(r.URL.Query().Get("startIndex"))
+	if err != nil {
+		http.Error(w, "Missing or invalid startIndex", http.StatusBadRequest)
+		return
+	}
+	byteCount, err := strconv.Atoi(r.URL.Query().Get("byteCount"))
+	if err != nil {
+		http.Error(w, "Missing or invalid byteCount", http.StatusBadRequest)
+		return
+	}
+
+	clientID, ok := middleware.GetClientID(r)
+	if !ok {
+		clientID = "default"
+	}
+	status := h.heatingSync.Status(h.store, clientID, startIndex, byteCount)
+
+	w.Header().Set("Content-Type", "application/json ;charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(status)
+}
+
+// GetAdminCloudSyncStatus reports read-only cloud sync scheduler state (LAN admin).
+func (h *Handler) GetAdminCloudSyncStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.cloudAgent == nil {
+		w.Header().Set("Content-Type", "application/json ;charset=UTF-8")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"enabled": false,
+			"message": "cloud sync agent not configured",
+		})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json ;charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(h.cloudAgent.Status())
 }
 
 // GetDebug handles GET /debug

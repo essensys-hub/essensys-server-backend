@@ -20,6 +20,12 @@ func NewRouter(handler *Handler, webHandler *WebHandler, unifiHandler *UniFiHand
 	apiMux.HandleFunc("/api/done/", handler.PostDone)           // Trailing slash to match /api/done/{guid}
 	apiMux.HandleFunc("/api/admin/inject", handler.PostAdminInject) // Admin endpoint to inject actions
 	apiMux.HandleFunc("/api/admin/exchange", handler.GetAdminExchange) // Read back exchange table values (reported via mystatus)
+	apiMux.HandleFunc("/api/admin/heating/sync", handler.PostAdminHeatingSync)
+	apiMux.HandleFunc("/api/admin/heating/sync/status", handler.GetAdminHeatingSyncStatus)
+	apiMux.HandleFunc("/api/admin/cloudsync/status", handler.GetAdminCloudSyncStatus)
+	apiMux.HandleFunc("/api/admin/scenarios/sync", handler.AdminScenariosSync)
+	apiMux.HandleFunc("/api/scenarios", handler.HandleScenarios)
+	apiMux.HandleFunc("/api/scenarios/", handler.HandleScenarios)
 
     // Web Frontend Routes (if webHandler is provided)
     if webHandler != nil {

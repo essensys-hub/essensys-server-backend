@@ -62,21 +62,32 @@ func (s *ActionService) SetMQTTPublisher(publisher MQTTPublisher, entityMapping 
 // AddAction adds an action to the queue with proper processing
 // It applies complete block generation and bitwise fusion as needed
 func (s *ActionService) AddAction(clientID string, params []protocol.ExchangeKV) (string, error) {
-	// Generate complete block if needed (for light/shutter indices 605-622)
-	processedParams := s.GenerateCompleteBlock(params)
+	guids, err := s.AddActions(clientID, params)
+	if err != nil || len(guids) == 0 {
+		return "", err
+	}
+	return guids[0], nil
+}
 
-	// Create action with processed parameters
-	action := protocol.Action{
-		GUID:   generateGUID(),
-		Params: processedParams,
+// AddActions enqueues one or more firmware actions (max 30 params each).
+func (s *ActionService) AddActions(clientID string, params []protocol.ExchangeKV) ([]string, error) {
+	processedParams := s.GenerateCompleteBlock(params)
+	chunks := chunkExchangeParams(processedParams, protocol.MaxParamsPerFirmwareAction)
+	if len(chunks) == 0 {
+		return nil, nil
 	}
 
-	// Enqueue the action
-	s.store.EnqueueAction(clientID, action)
+	guids := make([]string, 0, len(chunks))
+	for _, chunk := range chunks {
+		action := protocol.Action{
+			GUID:   generateGUID(),
+			Params: chunk,
+		}
+		s.store.EnqueueAction(clientID, action)
+		guids = append(guids, action.GUID)
+	}
 
-	// Publish state to MQTT if publisher is available
 	if s.mqttPublisher != nil && len(s.entityMapping) > 0 {
-		// Convert params to format expected by MQTT publisher
 		mqttParams := make([]struct {
 			K int
 			V string
@@ -90,7 +101,7 @@ func (s *ActionService) AddAction(clientID string, params []protocol.ExchangeKV)
 		s.mqttPublisher.PublishActionState(mqttParams, s.entityMapping)
 	}
 
-	return action.GUID, nil
+	return guids, nil
 }
 
 // ProcessAction applies bitwise fusion and generates complete blocks

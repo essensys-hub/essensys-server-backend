@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
@@ -17,14 +19,15 @@ import (
 )
 
 type Config struct {
-	Enabled             bool
-	HubURL              string
-	GatewayID           string
-	GatewayToken        string
-	PollIntervalSeconds int
-	ClientID            string
-	Eth0MAC             string
-	Eth1MAC             string
+	Enabled              bool
+	HubURL               string
+	GatewayID            string
+	GatewayToken         string
+	PollIntervalSeconds  int
+	ClientID             string
+	Eth0MAC              string
+	Eth1MAC              string
+	ScheduledSyncEnabled bool
 }
 
 type cloudAction struct {
@@ -36,13 +39,18 @@ type cloudAction struct {
 }
 
 type Agent struct {
-	cfg           Config
-	client        *http.Client
-	actionService *core.ActionService
-	store         data.Store
+	cfg            Config
+	client         *http.Client
+	actionService  *core.ActionService
+	store          data.Store
+	pullScheduler  *core.ExchangePullScheduler
+	syncRunning    atomic.Bool
+	profileMu      sync.Mutex
+	cachedProfiles []cloudSyncProfile
+	status         statusState
 }
 
-func NewAgent(cfg Config, actionService *core.ActionService, store data.Store) *Agent {
+func NewAgent(cfg Config, actionService *core.ActionService, store data.Store, pull *core.ExchangePullScheduler) *Agent {
 	return &Agent{
 		cfg: cfg,
 		client: &http.Client{
@@ -50,6 +58,7 @@ func NewAgent(cfg Config, actionService *core.ActionService, store data.Store) *
 		},
 		actionService: actionService,
 		store:         store,
+		pullScheduler: pull,
 	}
 }
 
@@ -69,22 +78,19 @@ func (a *Agent) Start(ctx context.Context) {
 	if clientID == "" {
 		clientID = "default"
 	}
-	log.Printf("[cloudsync] started hub=%s gateway=%s eth0=%s eth1=%s interval=%s",
-		a.cfg.HubURL, a.cfg.GatewayID, a.cfg.Eth0MAC, a.cfg.Eth1MAC, interval)
+	log.Printf("[cloudsync] started hub=%s gateway=%s scheduled_sync=%v interval=%s",
+		a.cfg.HubURL, a.cfg.GatewayID, a.cfg.ScheduledSyncEnabled, interval)
 
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
-		a.heartbeat(ctx)
-		a.pushExchange(ctx, clientID)
+		a.pollCycle(ctx, clientID)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				a.pollAndApply(ctx, clientID)
-				a.pushExchange(ctx, clientID)
-				a.heartbeat(ctx)
+				a.pollCycle(ctx, clientID)
 			}
 		}
 	}()
@@ -98,6 +104,19 @@ func (a *Agent) validateHubURL() error {
 		return fmt.Errorf("gateway_id and gateway_token required")
 	}
 	return nil
+}
+
+func (a *Agent) pollCycle(ctx context.Context, clientID string) {
+	a.pollAndApply(ctx, clientID)
+	cfg, err := a.fetchSyncConfig(ctx)
+	a.recordPoll(cfg, err)
+	if err != nil {
+		log.Printf("[cloudsync] sync-config: %v", err)
+	} else if cfg != nil && a.cfg.ScheduledSyncEnabled {
+		a.runScheduledSync(ctx, clientID, cfg)
+	}
+	a.pushExchangeProfileAware(ctx, clientID)
+	a.heartbeat(ctx)
 }
 
 func (a *Agent) pollAndApply(ctx context.Context, clientID string) {
@@ -193,36 +212,6 @@ func exchangePushIndices() []int {
 		indices = append(indices, i)
 	}
 	return indices
-}
-
-func (a *Agent) pushExchange(ctx context.Context, clientID string) {
-	if a.store == nil {
-		return
-	}
-	vals := a.store.GetAllValues(clientID, exchangePushIndices())
-	if len(vals) == 0 {
-		return
-	}
-	body, err := json.Marshal(map[string]any{"keys": vals})
-	if err != nil {
-		return
-	}
-	url := strings.TrimRight(a.cfg.HubURL, "/") + "/api/gateway/exchange"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return
-	}
-	a.setGatewayHeaders(req)
-	req.Header.Set("Content-Type", "application/json")
-	res, err := a.client.Do(req)
-	if err != nil {
-		log.Printf("[cloudsync] exchange push: %v", err)
-		return
-	}
-	res.Body.Close()
-	if res.StatusCode == http.StatusUnauthorized {
-		log.Printf("[cloudsync] exchange push unauthorized")
-	}
 }
 
 func (a *Agent) setGatewayHeaders(req *http.Request) {
