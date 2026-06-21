@@ -28,25 +28,31 @@ def inject_action(k, v):
         print(f"[TEST] Injection Failed: {e}")
         sys.exit(1)
 
+def acknowledge_actions(actions):
+    for action in actions:
+        guid = action.get("guid")
+        if not guid:
+            continue
+        resp = requests.post(f"{SERVER_URL}/api/done/{guid}")
+        resp.raise_for_status()
+
 def wait_for_done():
-    print("[TEST] Waiting for client to acknowledge (queue empty)...")
+    print("[TEST] Simulating legacy client ack (POST /api/done/{guid})...")
     while True:
         try:
             resp = requests.get(ACTIONS_URL)
             resp.raise_for_status()
             data = resp.json()
             actions = data.get("actions", [])
-            
+
             if not actions:
                 print("[TEST] Action queue empty. Done.")
                 return
-            
-            # Optional: Print what's pending
-            # print(f"[TEST] Pending: {len(actions)} actions")
-            
-            time.sleep(0.5)
+
+            acknowledge_actions(actions)
+            time.sleep(0.2)
         except Exception as e:
-            print(f"[TEST] Error polling actions: {e}")
+            print(f"[TEST] Error polling/acking actions: {e}")
             time.sleep(1)
 
 def verify_action_content(expected_k, expected_v):
