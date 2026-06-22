@@ -9,6 +9,7 @@ import (
 	"github.com/essensys-hub/essensys-server-backend/internal/cloudsync"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
+	"github.com/essensys-hub/essensys-server-backend/internal/api/testmode"
 	"github.com/essensys-hub/essensys-server-backend/internal/middleware"
 	"github.com/essensys-hub/essensys-server-backend/pkg/protocol"
     _ "embed"
@@ -269,6 +270,17 @@ func (h *Handler) PostAdminInject(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		params = []protocol.ExchangeKV{singleParam}
+	}
+
+	if testmode.IsDryRun(r) {
+		validated, err := h.actionService.ValidateParams(params)
+		if err != nil {
+			testmode.WriteFailed(w, err.Error())
+			return
+		}
+		snap := testmode.ExchangeSnapshot(h.store, clientID, validated)
+		testmode.WriteOK(w, validated, snap, "")
+		return
 	}
 
 	// Process the action using ActionService (auto-split >30 params for firmware).

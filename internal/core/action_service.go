@@ -104,6 +104,26 @@ func (s *ActionService) AddActions(clientID string, params []protocol.ExchangeKV
 	return guids, nil
 }
 
+// ValidateParams runs the same preprocessing as AddActions without enqueueing.
+func (s *ActionService) ValidateParams(params []protocol.ExchangeKV) ([]protocol.ExchangeKV, error) {
+	if len(params) == 0 {
+		return nil, fmt.Errorf("no params")
+	}
+	processed := s.GenerateCompleteBlock(params)
+	chunks := chunkExchangeParams(processed, protocol.MaxParamsPerFirmwareAction)
+	if len(chunks) == 0 {
+		return nil, fmt.Errorf("no params after processing")
+	}
+	flat := make([]protocol.ExchangeKV, 0, len(processed))
+	for _, chunk := range chunks {
+		if len(chunk) > protocol.MaxParamsPerFirmwareAction {
+			return nil, fmt.Errorf("chunk exceeds max %d params", protocol.MaxParamsPerFirmwareAction)
+		}
+		flat = append(flat, chunk...)
+	}
+	return flat, nil
+}
+
 // ProcessAction applies bitwise fusion and generates complete blocks
 func (s *ActionService) ProcessAction(params []protocol.ExchangeKV) []protocol.ExchangeKV {
 	// TODO: Implement action processing

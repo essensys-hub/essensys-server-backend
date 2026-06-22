@@ -6,8 +6,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/essensys-hub/essensys-server-backend/internal/api/testmode"
 	"github.com/essensys-hub/essensys-server-backend/internal/middleware"
 	"github.com/essensys-hub/essensys-server-backend/internal/scenario"
+	"github.com/essensys-hub/essensys-server-backend/pkg/protocol"
 )
 
 func (h *Handler) scenarios() *scenario.Service {
@@ -114,6 +116,22 @@ func (h *Handler) putScenario(w http.ResponseWriter, r *http.Request, slot int) 
 		return
 	}
 
+	if testmode.IsDryRun(r) {
+		chunks, err := scenario.WriteDefinitionChunks(slot, body.Params)
+		if err != nil {
+			if err == scenario.ErrSlot1ServerReserved {
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
+			testmode.WriteFailed(w, err.Error())
+			return
+		}
+		flat := flattenScenarioChunks(chunks)
+		snap := testmode.ExchangeSnapshot(h.store, clientID, flat)
+		testmode.WriteOK(w, flat, snap, "")
+		return
+	}
+
 	guids, err := h.scenarios().Put(clientID, slot, body.Params)
 	if err != nil {
 		if err == scenario.ErrSlot1ServerReserved {
@@ -131,6 +149,16 @@ func (h *Handler) putScenario(w http.ResponseWriter, r *http.Request, slot int) 
 
 func (h *Handler) launchScenario(w http.ResponseWriter, r *http.Request, slot int) {
 	clientID := scenarioClientID(r)
+	params, paramErr := scenario.LaunchParams(slot)
+	if testmode.IsDryRun(r) {
+		if paramErr != nil {
+			testmode.WriteFailed(w, paramErr.Error())
+			return
+		}
+		snap := testmode.ExchangeSnapshot(h.store, clientID, params)
+		testmode.WriteOK(w, params, snap, "")
+		return
+	}
 	guid, err := h.scenarios().Launch(clientID, slot)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -145,6 +173,16 @@ func (h *Handler) launchScenario(w http.ResponseWriter, r *http.Request, slot in
 
 func (h *Handler) restoreScenario(w http.ResponseWriter, r *http.Request, slot int) {
 	clientID := scenarioClientID(r)
+	params, paramErr := scenario.RestorePresetParams(slot)
+	if testmode.IsDryRun(r) {
+		if paramErr != nil {
+			testmode.WriteFailed(w, paramErr.Error())
+			return
+		}
+		snap := testmode.ExchangeSnapshot(h.store, clientID, params)
+		testmode.WriteOK(w, params, snap, "")
+		return
+	}
 	guid, err := h.scenarios().Restore(clientID, slot)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -172,4 +210,12 @@ func writeScenarioJSON(w http.ResponseWriter, code int, v any) {
 
 func methodNotAllowed(w http.ResponseWriter) {
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func flattenScenarioChunks(chunks [][]protocol.ExchangeKV) []protocol.ExchangeKV {
+	out := make([]protocol.ExchangeKV, 0)
+	for _, c := range chunks {
+		out = append(out, c...)
+	}
+	return out
 }

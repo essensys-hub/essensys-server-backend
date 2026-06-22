@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/essensys-hub/essensys-server-backend/internal/api/testmode"
 	"github.com/essensys-hub/essensys-server-backend/internal/auth"
     "github.com/essensys-hub/essensys-server-backend/internal/core"
     "github.com/essensys-hub/essensys-server-backend/internal/data"
@@ -563,6 +564,17 @@ func (h *WebHandler) PostWebActions(w http.ResponseWriter, r *http.Request) {
             {K: 411, V: msb},
             // Reset Authorization status to 0 (Pending)
             {K: 307, V: "0"}, 
+        }
+
+        if testmode.IsDryRun(r) {
+            validated, err := h.actionService.ValidateParams(params)
+            if err != nil {
+                testmode.WriteFailed(w, err.Error())
+                return
+            }
+            snap := testmode.ExchangeSnapshot(h.store, clientID, validated)
+            testmode.WriteOK(w, validated, snap, "")
+            return
         }
 
         guid, err := h.actionService.AddAction(clientID, params)
