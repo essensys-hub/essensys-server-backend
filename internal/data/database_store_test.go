@@ -283,7 +283,7 @@ func TestDatabaseStore_ActionQueue(t *testing.T) {
 	}
 
 	// Test AcknowledgeAction
-	acknowledged := store.AcknowledgeAction(clientID, action.GUID)
+	_, acknowledged := store.AcknowledgeAction(clientID, action.GUID)
 	if !acknowledged {
 		t.Error("Action should be acknowledged")
 	}

@@ -132,7 +132,7 @@ func TestMemoryStore_AcknowledgeAction(t *testing.T) {
 	store.EnqueueAction(clientID, action3)
 
 	// Acknowledge middle action
-	acknowledged := store.AcknowledgeAction(clientID, "guid-2")
+	_, acknowledged := store.AcknowledgeAction(clientID, "guid-2")
 	if !acknowledged {
 		t.Error("Expected action to be acknowledged")
 	}
@@ -161,7 +161,7 @@ func TestMemoryStore_AcknowledgeNonExistentAction(t *testing.T) {
 	clientID := "test-client"
 
 	// Try to acknowledge non-existent action
-	acknowledged := store.AcknowledgeAction(clientID, "non-existent-guid")
+	_, acknowledged := store.AcknowledgeAction(clientID, "non-existent-guid")
 	if acknowledged {
 		t.Error("Expected acknowledgment to fail for non-existent action")
 	}
