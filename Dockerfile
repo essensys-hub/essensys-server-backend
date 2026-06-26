@@ -39,9 +39,16 @@ COPY --from=builder /mcp-server /usr/local/bin/mcp-server
 COPY migrations/ /opt/essensys/migrations/
 COPY config.yaml.example /opt/essensys/config.yaml.example
 
+# Run as non-root for least privilege (Trivy DS-0002, SCRUM-7).
+# Ports are non-privileged (7070/8083) so no extra capabilities are required.
+RUN addgroup -S app && adduser -S -G app app \
+    && chown -R app:app /data /opt/essensys
+
 EXPOSE 7070 8083
 
 VOLUME ["/data"]
+
+USER app
 
 ENTRYPOINT ["server"]
 CMD ["-config", "/etc/essensys/config.yaml"]
