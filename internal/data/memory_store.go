@@ -52,7 +52,6 @@ func (et *ExchangeTable) GetAll(indices []int) []protocol.ExchangeKV {
 		}
 	}
 	return result
-	return result
 }
 
 // GetFull returns the entire map

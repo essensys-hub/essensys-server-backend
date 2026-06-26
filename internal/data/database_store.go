@@ -3,6 +3,7 @@ package data
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 
@@ -216,6 +217,39 @@ func (ds *DatabaseStore) GetAllValues(clientID string, indices []int) []protocol
 				K: index,
 				V: value,
 			})
+		}
+	}
+
+	return result
+}
+
+// GetFullTable retrieves all values from the exchange table for a client
+func (ds *DatabaseStore) GetFullTable(clientID string) map[int]string {
+	machineID, err := ds.getMachineIDByClientID(clientID)
+	if err != nil {
+		return map[int]string{}
+	}
+
+	// Get latest state
+	state, err := ds.stateRepo.GetLatestByMachineID(machineID)
+	if err != nil || state == nil {
+		return map[int]string{}
+	}
+
+	// Get all indexes for this state
+	stateIndexes, err := ds.stateRepo.GetIndexesByStateID(state.ID)
+	if err != nil {
+		return map[int]string{}
+	}
+
+	result := make(map[int]string)
+	for _, si := range stateIndexes {
+		di, err := ds.dataIndexRepo.GetByID(si.IndexID)
+		if err != nil || di == nil {
+			continue
+		}
+		if index, err := strconv.Atoi(di.IndexKey); err == nil {
+			result[index] = si.Value
 		}
 	}
 

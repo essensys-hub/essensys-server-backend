@@ -189,7 +189,7 @@ func testDatabaseStore(db *sqlx.DB, machine *models.Machine) {
 	fmt.Printf("   - DequeueActions OK (%d actions)\n", len(actions))
 
 	// Test AcknowledgeAction
-	acknowledged := store.AcknowledgeAction(clientID, action.GUID)
+	_, acknowledged := store.AcknowledgeAction(clientID, action.GUID)
 	if !acknowledged {
 		log.Fatal("Erreur AcknowledgeAction: action non reconnue")
 	}
