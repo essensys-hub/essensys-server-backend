@@ -21,6 +21,15 @@ type Config struct {
     MQTT    MQTTConfig    `yaml:"mqtt"`
     UniFi   UniFiConfig   `yaml:"unifi"`
     Cloud   CloudConfig   `yaml:"cloud"`
+    LanIAM  LanIAMConfig  `yaml:"lan_iam"`
+}
+
+type LanIAMConfig struct {
+    Enabled            bool   `yaml:"enabled"`
+    SessionTTLHours    int    `yaml:"session_ttl_hours"`
+    SecureCookie       bool   `yaml:"secure_cookie"`
+    BootstrapTokenFile string `yaml:"bootstrap_token_file"`
+    PassiveAuthCapture bool   `yaml:"passive_auth_capture"`
 }
 
 type CloudConfig struct {
@@ -149,6 +158,13 @@ func loadConfig(configFile string) (*Config, error) {
             PollIntervalSeconds:  5,
             ScheduledSyncEnabled: true,
         },
+        LanIAM: LanIAMConfig{
+            Enabled:            false,
+            SessionTTLHours:    168,
+            SecureCookie:       true,
+            BootstrapTokenFile: "/opt/data/config/lan_bootstrap.token",
+            PassiveAuthCapture: false,
+        },
 	}
 
 	// Try to load from config file if it exists
@@ -215,6 +231,17 @@ func loadFromEnv(cfg *Config) {
 		clients := parseClientCredentials(clientCreds)
 		if len(clients) > 0 {
 			cfg.Auth.Clients = clients
+		}
+	}
+
+	if v := os.Getenv("LAN_IAM_ENABLED"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.LanIAM.Enabled = b
+		}
+	}
+	if v := os.Getenv("LAN_SESSION_TTL_HOURS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.LanIAM.SessionTTLHours = n
 		}
 	}
 }
@@ -303,6 +330,9 @@ func (c *Config) LogConfig() {
 	log.Printf("Authentication:")
 	log.Printf("  Enabled: %v", c.Auth.Enabled)
 	log.Printf("  Configured Clients: %d", len(c.Auth.Clients))
+	log.Printf("LAN IAM:")
+	log.Printf("  Enabled: %v", c.LanIAM.Enabled)
+	log.Printf("  Session TTL (hours): %d", c.LanIAM.SessionTTLHours)
 	log.Printf("Logging:")
 	log.Printf("  Level: %s", c.Logging.Level)
 	log.Printf("  Format: %s", c.Logging.Format)

@@ -10,6 +10,16 @@ import (
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
 )
 
+func testRouter(handler *Handler, creds map[string]string, authEnabled bool, store data.Store) http.Handler {
+	return NewRouter(RouterConfig{
+		Handler:            handler,
+		ValidCredentials:   creds,
+		AuthEnabled:        authEnabled,
+		PassiveAuthCapture: true,
+		Store:              store,
+	})
+}
+
 func TestRouter_HealthCheck(t *testing.T) {
 	// Create test dependencies
 	store := data.NewMemoryStore()
@@ -18,7 +28,7 @@ func TestRouter_HealthCheck(t *testing.T) {
 	handler := NewHandler(actionService, statusService, store, nil, nil)
 
 	// Create router with empty credentials (health check doesn't need auth)
-	router := NewRouter(handler, nil, nil, map[string]string{}, false, store)
+	router := testRouter(handler, map[string]string{}, false, store)
 
 	// Create test request
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -51,7 +61,7 @@ func TestRouter_AuthenticationRequired(t *testing.T) {
 	validCredentials := map[string]string{
 		"testclient": "testpass",
 	}
-	router := NewRouter(handler, nil, nil, validCredentials, true, store)
+	router := testRouter(handler, validCredentials, true, store)
 
 	// Test routes that require authentication
 	routes := []string{
@@ -86,7 +96,7 @@ func TestRouter_ValidAuthentication(t *testing.T) {
 	validCredentials := map[string]string{
 		"testclient": "testpass",
 	}
-	router := NewRouter(handler, nil, nil, validCredentials, true, store)
+	router := testRouter(handler, validCredentials, true, store)
 
 	// Create request with valid auth
 	req := httptest.NewRequest(http.MethodGet, "/api/serverinfos", nil)
@@ -115,7 +125,7 @@ func TestRouter_MiddlewareChain(t *testing.T) {
 	validCredentials := map[string]string{
 		"testclient": "testpass",
 	}
-	router := NewRouter(handler, nil, nil, validCredentials, true, store)
+	router := testRouter(handler, validCredentials, true, store)
 
 	// Create request with valid auth
 	req := httptest.NewRequest(http.MethodGet, "/api/serverinfos", nil)
@@ -145,7 +155,7 @@ func TestRouter_AuthenticationDisabled(t *testing.T) {
 	handler := NewHandler(actionService, statusService, store, nil, nil)
 
 	// Create router with authentication disabled
-	router := NewRouter(handler, nil, nil, map[string]string{}, false, store)
+	router := testRouter(handler, map[string]string{}, false, store)
 
 	// Test routes that normally require authentication
 	routes := []string{

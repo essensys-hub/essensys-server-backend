@@ -26,7 +26,7 @@ func TestFullClientPollingCycle(t *testing.T) {
 	validCredentials := map[string]string{
 		"client1": "password1",
 	}
-	router := NewRouter(handler, nil, nil, validCredentials, true, store)
+	router := testRouter(handler, validCredentials, true, store)
 	server := httptest.NewServer(router)
 	defer server.Close()
 
@@ -197,7 +197,7 @@ func TestMultipleConcurrentClients(t *testing.T) {
 		"client2": "password2",
 		"client3": "password3",
 	}
-	router := NewRouter(handler, nil, nil, validCredentials, true, store)
+	router := testRouter(handler, validCredentials, true, store)
 	server := httptest.NewServer(router)
 	defer server.Close()
 
@@ -326,7 +326,7 @@ func TestActionQueueWithMultiplePendingActions(t *testing.T) {
 	validCredentials := map[string]string{
 		"client1": "password1",
 	}
-	router := NewRouter(handler, nil, nil, validCredentials, true, store)
+	router := testRouter(handler, validCredentials, true, store)
 	server := httptest.NewServer(router)
 	defer server.Close()
 
@@ -424,7 +424,7 @@ func TestMalformedJSONHandlingEndToEnd(t *testing.T) {
 	validCredentials := map[string]string{
 		"client1": "password1",
 	}
-	router := NewRouter(handler, nil, nil, validCredentials, true, store)
+	router := testRouter(handler, validCredentials, true, store)
 	server := httptest.NewServer(router)
 	defer server.Close()
 
@@ -509,7 +509,7 @@ func TestAuthenticationFailureScenarios(t *testing.T) {
 	validCredentials := map[string]string{
 		"client1": "password1",
 	}
-	router := NewRouter(handler, nil, nil, validCredentials, true, store)
+	router := testRouter(handler, validCredentials, true, store)
 	server := httptest.NewServer(router)
 	defer server.Close()
 
@@ -591,7 +591,7 @@ func TestConcurrentActionQueueOperations(t *testing.T) {
 	validCredentials := map[string]string{
 		"client1": "password1",
 	}
-	router := NewRouter(handler, nil, nil, validCredentials, true, store)
+	router := testRouter(handler, validCredentials, true, store)
 	server := httptest.NewServer(router)
 	defer server.Close()
 

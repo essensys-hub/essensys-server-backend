@@ -13,7 +13,7 @@ func TestBasicAuth_MissingAuthHeader(t *testing.T) {
 		"client1": "pass1",
 	}
 
-	handler := BasicAuth(validCredentials, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BasicAuth(validCredentials, nil, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -33,7 +33,7 @@ func TestBasicAuth_InvalidAuthHeader(t *testing.T) {
 		"client1": "pass1",
 	}
 
-	handler := BasicAuth(validCredentials, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BasicAuth(validCredentials, nil, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -54,7 +54,7 @@ func TestBasicAuth_InvalidBase64(t *testing.T) {
 		"client1": "pass1",
 	}
 
-	handler := BasicAuth(validCredentials, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BasicAuth(validCredentials, nil, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -75,7 +75,7 @@ func TestBasicAuth_InvalidCredentials(t *testing.T) {
 		"client1": "pass1",
 	}
 
-	handler := BasicAuth(validCredentials, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BasicAuth(validCredentials, nil, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -100,7 +100,7 @@ func TestBasicAuth_ValidCredentials(t *testing.T) {
 	}
 
 	var capturedClientID string
-	handler := BasicAuth(validCredentials, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BasicAuth(validCredentials, nil, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Extract clientID from context
 		if clientID, ok := r.Context().Value(ClientIDKey).(string); ok {
 			capturedClientID = clientID
@@ -148,7 +148,7 @@ func TestBasicAuth_MultipleClients(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		handler := BasicAuth(validCredentials, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := BasicAuth(validCredentials, nil, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
 
@@ -173,7 +173,7 @@ func TestBasicAuth_MalformedCredentials(t *testing.T) {
 		"client1": "pass1",
 	}
 
-	handler := BasicAuth(validCredentials, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BasicAuth(validCredentials, nil, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 

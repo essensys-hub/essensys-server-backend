@@ -18,6 +18,7 @@ import (
 	"github.com/essensys-hub/essensys-server-backend/internal/config"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
+	"github.com/essensys-hub/essensys-server-backend/internal/laniam"
 	"github.com/essensys-hub/essensys-server-backend/internal/metrics"
 	"github.com/essensys-hub/essensys-server-backend/internal/mqtt"
 	"github.com/essensys-hub/essensys-server-backend/internal/server"
@@ -145,14 +146,28 @@ func main() {
 	cloudCtx, cloudCancel := context.WithCancel(context.Background())
 	cloudAgent.Start(cloudCtx)
 
-    // Initialize SessionStore
+    // Initialize SessionStore (legacy web auth)
     sessionStore := auth.NewSessionStore()
 
-    // Initialize web handler (if db is connected)
     var webHandler *api.WebHandler
-    if db != nil {
+    var lanIAMHandler *api.LanIAMHandler
+    var lanSessionStore *laniam.SessionStore
+    lanIAMReady := false
+
+    if cfg.LanIAM.Enabled {
+        if db == nil {
+            log.Printf("WARNING: lan_iam.enabled but database unavailable — LAN IAM disabled")
+        } else {
+            lanSessionStore = laniam.NewSessionStore(cfg.LanIAM.SessionTTLHours)
+            lanRepo := laniam.NewUserRepository(db)
+            lanSvc := laniam.NewService(lanRepo, lanSessionStore, cfg.LanIAM.BootstrapTokenFile)
+            lanIAMHandler = api.NewLanIAMHandler(lanSvc, cfg.LanIAM.SecureCookie)
+            lanIAMReady = true
+            log.Printf("Initialized LAN IAM (session TTL %dh)", cfg.LanIAM.SessionTTLHours)
+        }
+    } else if db != nil {
         webHandler = api.NewWebHandler(db, sessionStore, actionService, store)
-        log.Println("Initialized Web Handler (Authentication enabled)")
+        log.Println("Initialized Web Handler (legacy authentication)")
     } else {
         log.Println("WARNING: Database not connected. Web Handler (Auth) disabled.")
     }
@@ -170,9 +185,28 @@ func main() {
 		}
 	}
 
-	// Setup router with middleware chain
-	router := api.NewRouter(handler, webHandler, unifiHandler, cfg.Auth.Clients, cfg.Auth.Enabled, store)
-	if cfg.Auth.Enabled {
+	passiveCapture := cfg.LanIAM.PassiveAuthCapture
+	if cfg.LanIAM.Enabled {
+		passiveCapture = false
+	}
+
+	router := api.NewRouter(api.RouterConfig{
+		Handler:            handler,
+		WebHandler:         webHandler,
+		UniFiHandler:       unifiHandler,
+		LanIAMHandler:      lanIAMHandler,
+		LanSessionStore:    lanSessionStore,
+		LanIAMEnabled:      cfg.LanIAM.Enabled && lanIAMReady,
+		LanIAMReady:        lanIAMReady,
+		SecureCookie:       cfg.LanIAM.SecureCookie,
+		ValidCredentials:   cfg.Auth.Clients,
+		AuthEnabled:        cfg.Auth.Enabled,
+		PassiveAuthCapture: passiveCapture,
+		Store:              store,
+	})
+	if cfg.LanIAM.Enabled && lanIAMReady {
+		log.Println("Configured HTTP router with LAN IAM session auth")
+	} else if cfg.Auth.Enabled {
 		log.Println("Configured HTTP router with middleware chain (Recovery → Logging → CaptureAuth)")
 	} else {
 		log.Println("Configured HTTP router with middleware chain (Recovery → Logging) - Authentication DISABLED")

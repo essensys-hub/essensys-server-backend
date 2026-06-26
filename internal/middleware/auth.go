@@ -24,10 +24,9 @@ func GetClientID(r *http.Request) (string, bool) {
 	return clientID, ok
 }
 
-// BasicAuth middleware validates Basic Authentication credentials
-// validCredentials is a map of username:password pairs
-// PASSIVE MODE: Captures credentials but accepts all requests
-func BasicAuth(validCredentials map[string]string, store data.Store) func(http.Handler) http.Handler {
+// BasicAuth middleware validates Basic Authentication credentials.
+// When passiveCapture is false or LAN IAM is active, credentials are not stored in Redis.
+func BasicAuth(validCredentials map[string]string, store data.Store, passiveCapture bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			
@@ -52,11 +51,9 @@ func BasicAuth(validCredentials map[string]string, store data.Store) func(http.H
 						// password := parts[1] // Ignored in passive mode
 
 						clientID = username
-						
-						// Capture Auth Info to Redis
-						// This is the core requirement: "recupérer les ip... user, password envoyer en base 64 et stoeker"
-						ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-						if store != nil {
+
+						if passiveCapture && store != nil {
+							ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 							store.SetAuthInfo(username, ip, encodedCredentials, "?")
 						}
 					}

@@ -5,85 +5,128 @@ import (
 	"net/http"
 
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
+	"github.com/essensys-hub/essensys-server-backend/internal/laniam"
 	"github.com/essensys-hub/essensys-server-backend/internal/metrics"
 	"github.com/essensys-hub/essensys-server-backend/internal/middleware"
+	"github.com/essensys-hub/essensys-server-backend/internal/models"
 )
 
-// NewRouter creates and configures the HTTP router with all middleware and routes
-// If authEnabled is false, authentication middleware is skipped
-func NewRouter(handler *Handler, webHandler *WebHandler, unifiHandler *UniFiHandler, validCredentials map[string]string, authEnabled bool, store data.Store) http.Handler {
-	// Create separate mux for API routes
+// RouterConfig groups HTTP router dependencies.
+type RouterConfig struct {
+	Handler            *Handler
+	WebHandler         *WebHandler
+	UniFiHandler       *UniFiHandler
+	LanIAMHandler      *LanIAMHandler
+	LanSessionStore    *laniam.SessionStore
+	LanIAMEnabled      bool
+	LanIAMReady        bool
+	SecureCookie       bool
+	ValidCredentials   map[string]string
+	AuthEnabled        bool
+	PassiveAuthCapture bool
+	Store              data.Store
+}
+
+// NewRouter creates and configures the HTTP router with all middleware and routes.
+func NewRouter(cfg RouterConfig) http.Handler {
 	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("/api/serverinfos", handler.GetServerInfos)
-	apiMux.HandleFunc("/api/mystatus", handler.PostMyStatus)
-	apiMux.HandleFunc("/api/myactions", handler.GetMyActions)
-	apiMux.HandleFunc("/api/done/", handler.PostDone)           // Trailing slash to match /api/done/{guid}
-	apiMux.HandleFunc("/api/admin/inject", handler.PostAdminInject) // Admin endpoint to inject actions
-	apiMux.HandleFunc("/api/admin/exchange", handler.GetAdminExchange) // Read back exchange table values (reported via mystatus)
-	apiMux.HandleFunc("/api/admin/heating/sync", handler.PostAdminHeatingSync)
-	apiMux.HandleFunc("/api/admin/heating/sync/status", handler.GetAdminHeatingSyncStatus)
-	apiMux.HandleFunc("/api/admin/cloudsync/status", handler.GetAdminCloudSyncStatus)
-	apiMux.HandleFunc("/api/admin/scenarios/sync", handler.AdminScenariosSync)
-	apiMux.HandleFunc("/api/scenarios", handler.HandleScenarios)
-	apiMux.HandleFunc("/api/scenarios/", handler.HandleScenarios)
 
-    // Web Frontend Routes (if webHandler is provided)
-    if webHandler != nil {
-        apiMux.HandleFunc("/api/auth/login", webHandler.Login)
-        apiMux.HandleFunc("/api/auth/logout", webHandler.Logout)
-        apiMux.HandleFunc("/api/auth/register", webHandler.Register)
-        apiMux.HandleFunc("/api/user/me", webHandler.GetCurrentUser)
-        // Alarm & Actions
-        apiMux.HandleFunc("/api/web/actions", webHandler.PostWebActions)
-        // History - returns the last action sent for a device
-        apiMux.HandleFunc("/api/web/history/latest", webHandler.GetHistoryLatest)
-    }
-
-    // UniFi Protect Routes (if unifiHandler is provided)
-    if unifiHandler != nil {
-        apiMux.HandleFunc("/api/unifi/cameras", unifiHandler.GetCameras)
-        apiMux.HandleFunc("/api/unifi/cameras/", unifiHandler.GetCameraSnapshot) // Trailing slash for path matching
-    }
-
-	// Conditionally apply authentication middleware to API routes
-	var apiHandler http.Handler = apiMux
-	if authEnabled {
-		// Even if passive, we use the middleware to capture data
-		apiHandler = middleware.BasicAuth(validCredentials, store)(apiMux)
+	legacyIoT := func(pattern string, fn http.HandlerFunc) {
+		apiMux.HandleFunc(pattern, fn)
 	}
 
-	// Create main mux that includes both authenticated and public routes
+	var protect func(http.Handler) http.Handler
+	if cfg.LanIAMEnabled && cfg.LanSessionStore != nil {
+		protect = middleware.LanRequireSession(cfg.LanSessionStore, cfg.SecureCookie)
+	} else {
+		protect = func(h http.Handler) http.Handler { return h }
+	}
+
+	adminOnly := func(h http.Handler) http.Handler {
+		if cfg.LanIAMEnabled && cfg.LanSessionStore != nil {
+			return protect(middleware.LanRequireRole(models.LanRoleAdmin)(h))
+		}
+		return h
+	}
+
+	legacyIoT("/api/serverinfos", cfg.Handler.GetServerInfos)
+	legacyIoT("/api/mystatus", cfg.Handler.PostMyStatus)
+	legacyIoT("/api/myactions", cfg.Handler.GetMyActions)
+	legacyIoT("/api/done/", cfg.Handler.PostDone)
+
+	apiMux.Handle("/api/admin/inject", protect(http.HandlerFunc(cfg.Handler.PostAdminInject)))
+	apiMux.Handle("/api/admin/exchange", protect(http.HandlerFunc(cfg.Handler.GetAdminExchange)))
+	apiMux.Handle("/api/admin/heating/sync", protect(http.HandlerFunc(cfg.Handler.PostAdminHeatingSync)))
+	apiMux.Handle("/api/admin/heating/sync/status", protect(http.HandlerFunc(cfg.Handler.GetAdminHeatingSyncStatus)))
+	apiMux.Handle("/api/admin/cloudsync/status", protect(http.HandlerFunc(cfg.Handler.GetAdminCloudSyncStatus)))
+	apiMux.Handle("/api/admin/scenarios/sync", protect(http.HandlerFunc(cfg.Handler.AdminScenariosSync)))
+	apiMux.Handle("/api/scenarios", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))
+	apiMux.Handle("/api/scenarios/", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))
+
+	if cfg.LanIAMHandler != nil {
+		apiMux.HandleFunc("/api/auth/login", cfg.LanIAMHandler.Login)
+		apiMux.HandleFunc("/api/auth/logout", cfg.LanIAMHandler.Logout)
+		apiMux.Handle("/api/user/me", protect(http.HandlerFunc(cfg.LanIAMHandler.Me)))
+		apiMux.Handle("/api/user/me/password", protect(http.HandlerFunc(cfg.LanIAMHandler.ChangePassword)))
+		apiMux.Handle("/api/admin/lan-users/bootstrap", http.HandlerFunc(cfg.LanIAMHandler.Bootstrap))
+		apiMux.Handle("/api/admin/lan-users", adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				cfg.LanIAMHandler.ListUsers(w, r)
+			case http.MethodPost:
+				cfg.LanIAMHandler.CreateUser(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		})))
+		apiMux.Handle("/api/admin/lan-users/", adminOnly(http.HandlerFunc(cfg.LanIAMHandler.HandleLanUserSubresource)))
+		apiMux.HandleFunc("/api/auth/register", cfg.LanIAMHandler.RegisterClosed)
+	} else if cfg.WebHandler != nil {
+		apiMux.HandleFunc("/api/auth/login", cfg.WebHandler.Login)
+		apiMux.HandleFunc("/api/auth/logout", cfg.WebHandler.Logout)
+		apiMux.HandleFunc("/api/auth/register", cfg.WebHandler.Register)
+		apiMux.HandleFunc("/api/user/me", cfg.WebHandler.GetCurrentUser)
+		apiMux.HandleFunc("/api/web/actions", cfg.WebHandler.PostWebActions)
+		apiMux.HandleFunc("/api/web/history/latest", cfg.WebHandler.GetHistoryLatest)
+	}
+
+	if cfg.UniFiHandler != nil {
+		apiMux.Handle("/api/unifi/cameras", protect(http.HandlerFunc(cfg.UniFiHandler.GetCameras)))
+		apiMux.Handle("/api/unifi/cameras/", protect(http.HandlerFunc(cfg.UniFiHandler.GetCameraSnapshot)))
+	}
+
+	var apiHandler http.Handler = apiMux
+	if cfg.AuthEnabled && !cfg.LanIAMEnabled {
+		apiHandler = middleware.BasicAuth(cfg.ValidCredentials, cfg.Store, cfg.PassiveAuthCapture)(apiMux)
+	}
+
 	mainMux := http.NewServeMux()
 	mainMux.Handle("/api/", apiHandler)
-	mainMux.HandleFunc("/health", healthCheckHandler)
-	mainMux.HandleFunc("/debug", handler.GetDebug) // Debug interface (public/unauthenticated or strict if moved to apiMux)
-    mainMux.HandleFunc("/debug/logs", handler.GetDebugLogs) // Pollable logs
-	mainMux.HandleFunc("/table_ref", handler.GetTableRef) // Redis Reference Table Dump
+	mainMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		healthCheckHandler(w, r, cfg.LanIAMEnabled, cfg.LanIAMReady)
+	})
+	mainMux.HandleFunc("/debug", cfg.Handler.GetDebug)
+	mainMux.HandleFunc("/debug/logs", cfg.Handler.GetDebugLogs)
+	mainMux.HandleFunc("/table_ref", cfg.Handler.GetTableRef)
 	mainMux.Handle("/metrics", metrics.Handler())
 
-	// Wire up middleware chain: Recovery → Logging → Metrics → Routes
-	var finalHandler http.Handler = mainMux
-	finalHandler = metrics.InstrumentHandler(finalHandler)
+	finalHandler := metrics.InstrumentHandler(mainMux)
 	finalHandler = middleware.RequestLogger(finalHandler)
 	finalHandler = middleware.Recovery(finalHandler)
-
 	return finalHandler
 }
 
-// healthCheckHandler handles GET /health
-func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
-	// Only allow GET method
+func healthCheckHandler(w http.ResponseWriter, r *http.Request, lanIAMEnabled, lanIAMReady bool) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	// Return simple health check response
-	response := map[string]string{
-		"status": "ok",
+	response := map[string]interface{}{
+		"status":          "ok",
+		"lan_iam_enabled": lanIAMEnabled,
+		"auth_ready":      !lanIAMEnabled || lanIAMReady,
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }

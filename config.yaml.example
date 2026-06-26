@@ -60,3 +60,11 @@ unifi:
   # If MFA is enabled, you may need to use a local account or disable MFA temporarily
   username: ""
   password: ""
+
+# IAM LAN (OpenSpec 2026-06.017) — comptes mon.essensys.local
+lan_iam:
+  enabled: false
+  session_ttl_hours: 168
+  secure_cookie: true
+  bootstrap_token_file: /opt/data/config/lan_bootstrap.token
+  passive_auth_capture: false
