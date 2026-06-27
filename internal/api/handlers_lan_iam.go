@@ -225,6 +225,12 @@ func (h *LanIAMHandler) HandleLanUserSubresource(w http.ResponseWriter, r *http.
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	case action == "enable" && r.Method == http.MethodPost:
+		if err := h.svc.EnableUser(admin, id); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	default:
 		http.NotFound(w, r)
 	}

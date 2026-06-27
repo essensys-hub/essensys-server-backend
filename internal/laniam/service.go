@@ -176,6 +176,20 @@ func (s *Service) DisableUser(admin *models.LanUser, targetID int) error {
 	return nil
 }
 
+func (s *Service) EnableUser(admin *models.LanUser, targetID int) error {
+	if !admin.CanManageLanUsers() {
+		return fmt.Errorf("forbidden")
+	}
+	target, err := s.repo.GetByID(targetID)
+	if err != nil || target == nil {
+		return fmt.Errorf("user not found")
+	}
+	if !target.IsDisabled() {
+		return nil
+	}
+	return s.repo.SetDisabled(targetID, false)
+}
+
 func (s *Service) ListUsers(admin *models.LanUser) ([]models.LanUser, error) {
 	if !admin.CanManageLanUsers() {
 		return nil, fmt.Errorf("forbidden")
