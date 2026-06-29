@@ -1,11 +1,17 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 const (
 	LanRoleAdmin = "lan_admin"
 	LanRoleUser  = "lan_user"
 	LanRoleGuest = "lan_guest"
+
+	// BootstrapLanAdminEmail is the factory LAN admin; it must never use trusted-device auto-login.
+	BootstrapLanAdminEmail = "admin@essensys.local"
 
 	PasswordAlgoBcrypt     = "bcrypt"
 	PasswordAlgoSHA1Legacy = "sha1_legacy"
@@ -31,6 +37,22 @@ func (u *LanUser) IsDisabled() bool {
 
 func (u *LanUser) CanManageLanUsers() bool {
 	return u.Role == LanRoleAdmin
+}
+
+func (u *LanUser) IsBootstrapLanAdmin() bool {
+	return strings.EqualFold(strings.TrimSpace(u.Email), BootstrapLanAdminEmail)
+}
+
+func (u *LanUser) CanUseTrustedDevices() bool {
+	if u.IsBootstrapLanAdmin() {
+		return false
+	}
+	switch u.Role {
+	case LanRoleAdmin, LanRoleUser, LanRoleGuest:
+		return true
+	default:
+		return false
+	}
 }
 
 func (u *LanUser) CanPilotDomotics() bool {

@@ -65,9 +65,22 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	if cfg.LanIAMHandler != nil {
 		apiMux.HandleFunc("/api/auth/login", cfg.LanIAMHandler.Login)
+		apiMux.HandleFunc("/api/auth/auto-login", cfg.LanIAMHandler.AutoLogin)
 		apiMux.HandleFunc("/api/auth/logout", cfg.LanIAMHandler.Logout)
 		apiMux.Handle("/api/user/me", protect(http.HandlerFunc(cfg.LanIAMHandler.Me)))
 		apiMux.Handle("/api/user/me/password", protect(http.HandlerFunc(cfg.LanIAMHandler.ChangePassword)))
+		apiMux.Handle("/api/user/me/trusted-devices", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				cfg.LanIAMHandler.ListTrustedDevices(w, r)
+			case http.MethodPost:
+				cfg.LanIAMHandler.CreateTrustedDevice(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		})))
+		apiMux.Handle("/api/user/me/trusted-devices/candidates", protect(http.HandlerFunc(cfg.LanIAMHandler.ListTrustedDeviceCandidates)))
+		apiMux.Handle("/api/user/me/trusted-devices/", protect(http.HandlerFunc(cfg.LanIAMHandler.DeleteTrustedDevice)))
 		apiMux.Handle("/api/admin/lan-users/bootstrap", http.HandlerFunc(cfg.LanIAMHandler.Bootstrap))
 		apiMux.Handle("/api/admin/lan-users", adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
@@ -80,6 +93,18 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			}
 		})))
 		apiMux.Handle("/api/admin/lan-users/", adminOnly(http.HandlerFunc(cfg.LanIAMHandler.HandleLanUserSubresource)))
+		apiMux.Handle("/api/admin/trusted-devices", adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				cfg.LanIAMHandler.ListAdminTrustedDevices(w, r)
+			case http.MethodPost:
+				cfg.LanIAMHandler.CreateAdminTrustedDevice(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		})))
+		apiMux.Handle("/api/admin/trusted-devices/candidates", adminOnly(http.HandlerFunc(cfg.LanIAMHandler.ListAdminTrustedDeviceCandidates)))
+		apiMux.Handle("/api/admin/trusted-devices/", adminOnly(http.HandlerFunc(cfg.LanIAMHandler.HandleAdminTrustedDeviceSubresource)))
 		apiMux.HandleFunc("/api/auth/register", cfg.LanIAMHandler.RegisterClosed)
 	} else if cfg.WebHandler != nil {
 		apiMux.HandleFunc("/api/auth/login", cfg.WebHandler.Login)

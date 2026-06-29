@@ -53,7 +53,7 @@ func main() {
 	// Initialize store
 	// Initialize store
 	// store := data.NewMemoryStore()
-	
+
 	// Initialize Redis store
 	store := data.NewRedisStore(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.DB)
 	log.Printf("Initialized Redis data store (%s)", cfg.Redis.Addr)
@@ -72,7 +72,7 @@ func main() {
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
 	log.Println("Initialized action and status services")
-	
+
 	// Initialize MQTT client (if enabled)
 	var mqttClient *mqtt.Client
 	if cfg.MQTT.Enabled {
@@ -82,19 +82,19 @@ func main() {
 			mqttClient = nil
 		} else {
 			log.Println("Connected to MQTT broker")
-			
+
 			// Publish MQTT Discovery configs
 			if err := mqttClient.PublishDiscoveryConfigs(); err != nil {
 				log.Printf("WARNING: Failed to publish MQTT Discovery configs: %v", err)
 			}
-			
+
 			// Subscribe to command topics
 			entityMapping := mqttClient.GetEntityMapping()
 			commandHandler := mqtt.NewCommandHandler(actionService, entityMapping)
 			if err := mqttClient.SubscribeToCommands(commandHandler); err != nil {
 				log.Printf("WARNING: Failed to subscribe to MQTT command topics: %v", err)
 			}
-			
+
 			// Set up entity mapping for ActionService to publish states
 			// Build reverse mapping: index -> entity info
 			indexToEntity := make(map[int]struct {
@@ -116,7 +116,7 @@ func main() {
 			actionService.SetMQTTPublisher(mqttClient, indexToEntity)
 		}
 	}
-	
+
 	// Initialize Archiver
 	if db != nil {
 		archiver := core.NewArchiverService(store, db)
@@ -146,31 +146,33 @@ func main() {
 	cloudCtx, cloudCancel := context.WithCancel(context.Background())
 	cloudAgent.Start(cloudCtx)
 
-    // Initialize SessionStore (legacy web auth)
-    sessionStore := auth.NewSessionStore()
+	// Initialize SessionStore (legacy web auth)
+	sessionStore := auth.NewSessionStore()
 
-    var webHandler *api.WebHandler
-    var lanIAMHandler *api.LanIAMHandler
-    var lanSessionStore *laniam.SessionStore
-    lanIAMReady := false
+	var webHandler *api.WebHandler
+	var lanIAMHandler *api.LanIAMHandler
+	var lanSessionStore *laniam.SessionStore
+	lanIAMReady := false
 
-    if cfg.LanIAM.Enabled {
-        if db == nil {
-            log.Printf("WARNING: lan_iam.enabled but database unavailable — LAN IAM disabled")
-        } else {
-            lanSessionStore = laniam.NewSessionStore(cfg.LanIAM.SessionTTLHours)
-            lanRepo := laniam.NewUserRepository(db)
-            lanSvc := laniam.NewService(lanRepo, lanSessionStore, cfg.LanIAM.BootstrapTokenFile)
-            lanIAMHandler = api.NewLanIAMHandler(lanSvc, cfg.LanIAM.SecureCookie)
-            lanIAMReady = true
-            log.Printf("Initialized LAN IAM (session TTL %dh)", cfg.LanIAM.SessionTTLHours)
-        }
-    } else if db != nil {
-        webHandler = api.NewWebHandler(db, sessionStore, actionService, store)
-        log.Println("Initialized Web Handler (legacy authentication)")
-    } else {
-        log.Println("WARNING: Database not connected. Web Handler (Auth) disabled.")
-    }
+	if cfg.LanIAM.Enabled {
+		if db == nil {
+			log.Printf("WARNING: lan_iam.enabled but database unavailable — LAN IAM disabled")
+		} else {
+			lanSessionStore = laniam.NewSessionStore(cfg.LanIAM.SessionTTLHours)
+			lanRepo := laniam.NewUserRepository(db)
+			trustedDeviceRepo := laniam.NewTrustedDeviceRepository(db)
+			loginClientRepo := laniam.NewLoginClientRepository(db)
+			lanSvc := laniam.NewService(lanRepo, trustedDeviceRepo, loginClientRepo, laniam.NewNeighbourResolver(), lanSessionStore, cfg.LanIAM.BootstrapTokenFile)
+			lanIAMHandler = api.NewLanIAMHandler(lanSvc, cfg.LanIAM.SecureCookie)
+			lanIAMReady = true
+			log.Printf("Initialized LAN IAM (session TTL %dh)", cfg.LanIAM.SessionTTLHours)
+		}
+	} else if db != nil {
+		webHandler = api.NewWebHandler(db, sessionStore, actionService, store)
+		log.Println("Initialized Web Handler (legacy authentication)")
+	} else {
+		log.Println("WARNING: Database not connected. Web Handler (Auth) disabled.")
+	}
 
 	// Initialize UniFi Protect client (if enabled)
 	var unifiHandler *api.UniFiHandler
