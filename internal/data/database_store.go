@@ -30,6 +30,10 @@ type DatabaseStore struct {
 	// clientID is typically "default" or a machine identifier from Basic Auth
 	mu          sync.RWMutex
 	clientCache map[string]int // clientID -> machineID
+
+	lastPollMu         sync.RWMutex
+	lastPollByClient   map[string]time.Time
+	lastPolledClientID string
 }
 
 // NewDatabaseStore creates a new DatabaseStore instance
@@ -41,7 +45,8 @@ func NewDatabaseStore(db *sqlx.DB) *DatabaseStore {
 		actionRepo:    database.NewActionRepository(db),
 		stateRepo:     database.NewStateRepository(db),
 		dataIndexRepo: database.NewDataIndexRepository(db),
-		clientCache:   make(map[string]int),
+		clientCache:     make(map[string]int),
+		lastPollByClient: make(map[string]time.Time),
 	}
 }
 
@@ -386,6 +391,32 @@ func (ds *DatabaseStore) SetClientConnected(clientID string, connected bool) {
 	// For database store, connection status is derived from state freshness
 	// This method is kept for interface compatibility
 	// The actual connection status is determined by IsClientConnected
+}
+
+func (ds *DatabaseStore) RecordClientPoll(clientID string, at time.Time) {
+	ds.lastPollMu.Lock()
+	defer ds.lastPollMu.Unlock()
+	if ds.lastPollByClient == nil {
+		ds.lastPollByClient = make(map[string]time.Time)
+	}
+	ds.lastPollByClient[clientID] = at
+	ds.lastPolledClientID = clientID
+}
+
+func (ds *DatabaseStore) GetClientLastPoll(clientID string) (time.Time, bool) {
+	ds.lastPollMu.RLock()
+	defer ds.lastPollMu.RUnlock()
+	t, ok := ds.lastPollByClient[clientID]
+	return t, ok
+}
+
+func (ds *DatabaseStore) GetLastPolledClientID() (string, bool) {
+	ds.lastPollMu.RLock()
+	defer ds.lastPollMu.RUnlock()
+	if ds.lastPolledClientID == "" {
+		return "", false
+	}
+	return ds.lastPolledClientID, true
 }
 
 // SetAuthInfo stores auth info

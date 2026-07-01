@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/essensys-hub/essensys-server-backend/internal/config"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
 	"github.com/essensys-hub/essensys-server-backend/internal/middleware"
@@ -19,7 +20,7 @@ func TestGetServerInfos(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/serverinfos", nil)
@@ -58,7 +59,7 @@ func TestPostMyStatus(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	// Create request with valid JSON
 	statusReq := protocol.StatusRequest{
@@ -97,7 +98,7 @@ func TestPostMyStatus_MalformedJSON(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	// Create request with malformed JSON (unquoted keys)
 	malformedJSON := `{"version":"1.0","ek":[{k:100,v:"test"}]}`
@@ -125,7 +126,7 @@ func TestGetMyActions(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	// Add an action to the queue
 	action := protocol.Action{
@@ -193,7 +194,7 @@ func TestGetMyActions_EmptyQueue(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/myactions", nil)
@@ -224,7 +225,7 @@ func TestPostDone(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	// Add an action to the queue
 	action := protocol.Action{
@@ -265,7 +266,7 @@ func TestPostDone_NotFound(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	// Create request with non-existent GUID
 	req := httptest.NewRequest(http.MethodPost, "/api/done/non-existent-guid", nil)

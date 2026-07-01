@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/essensys-hub/essensys-server-backend/internal/config"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
 	"github.com/essensys-hub/essensys-server-backend/pkg/protocol"
@@ -21,7 +22,7 @@ func TestFullClientPollingCycle(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	validCredentials := map[string]string{
 		"client1": "password1",
@@ -190,7 +191,7 @@ func TestMultipleConcurrentClients(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	validCredentials := map[string]string{
 		"client1": "password1",
@@ -321,7 +322,7 @@ func TestActionQueueWithMultiplePendingActions(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	validCredentials := map[string]string{
 		"client1": "password1",
@@ -419,7 +420,7 @@ func TestMalformedJSONHandlingEndToEnd(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	validCredentials := map[string]string{
 		"client1": "password1",
@@ -504,7 +505,7 @@ func TestAuthenticationFailureScenarios(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	validCredentials := map[string]string{
 		"client1": "password1",
@@ -586,7 +587,7 @@ func TestConcurrentActionQueueOperations(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	validCredentials := map[string]string{
 		"client1": "password1",

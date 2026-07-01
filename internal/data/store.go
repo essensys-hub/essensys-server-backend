@@ -26,6 +26,9 @@ type Store interface {
 	// Client Management (for legacy IoT client protocol)
 	IsClientConnected(clientID string) bool
 	SetClientConnected(clientID string, connected bool)
+	RecordClientPoll(clientID string, at time.Time)
+	GetClientLastPoll(clientID string) (time.Time, bool)
+	GetLastPolledClientID() (string, bool)
 
 	// Auth Info Management
 	SetAuthInfo(clientID, ip, auth, version string)

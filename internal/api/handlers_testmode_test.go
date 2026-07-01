@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/essensys-hub/essensys-server-backend/internal/config"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
 )
@@ -14,7 +15,7 @@ import (
 func TestPostAdminInject_dryRun(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
-	h := NewHandler(actionService, core.NewStatusService(store), store, nil, nil)
+	h := NewHandler(actionService, core.NewStatusService(store), store, nil, nil, config.ArmoireConfig{})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/inject?test_mode=dry_run", strings.NewReader(`{"k":590,"v":"2"}`))
 	rec := httptest.NewRecorder()
@@ -37,7 +38,7 @@ func TestPostAdminInject_dryRun(t *testing.T) {
 
 func TestHandleScenarios_launchDryRun(t *testing.T) {
 	store := data.NewMemoryStore()
-	h := NewHandler(core.NewActionService(store), core.NewStatusService(store), store, nil, nil)
+	h := NewHandler(core.NewActionService(store), core.NewStatusService(store), store, nil, nil, config.ArmoireConfig{})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/scenarios/2/launch?test_mode=dry_run", nil)
 	rec := httptest.NewRecorder()

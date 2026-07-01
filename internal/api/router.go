@@ -59,6 +59,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	apiMux.Handle("/api/admin/heating/sync", protect(http.HandlerFunc(cfg.Handler.PostAdminHeatingSync)))
 	apiMux.Handle("/api/admin/heating/sync/status", protect(http.HandlerFunc(cfg.Handler.GetAdminHeatingSyncStatus)))
 	apiMux.Handle("/api/admin/cloudsync/status", protect(http.HandlerFunc(cfg.Handler.GetAdminCloudSyncStatus)))
+	apiMux.Handle("/api/admin/armoire/snapshot", protect(http.HandlerFunc(cfg.Handler.GetAdminArmoireSnapshot)))
 	apiMux.Handle("/api/admin/scenarios/sync", protect(http.HandlerFunc(cfg.Handler.AdminScenariosSync)))
 	apiMux.Handle("/api/scenarios", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))
 	apiMux.Handle("/api/scenarios/", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))

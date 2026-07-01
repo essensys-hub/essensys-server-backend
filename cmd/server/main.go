@@ -140,7 +140,7 @@ func main() {
 	}, actionService, store, pullScheduler)
 
 	// Initialize handler
-	handler := api.NewHandler(actionService, statusService, store, pullScheduler, cloudAgent)
+	handler := api.NewHandler(actionService, statusService, store, pullScheduler, cloudAgent, cfg.Armoire)
 
 	// Cloud hub sync (optional — outbound HTTPS to mon.essensys.fr)
 	cloudCtx, cloudCancel := context.WithCancel(context.Background())

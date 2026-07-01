@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/essensys-hub/essensys-server-backend/internal/config"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
 )
@@ -13,7 +14,7 @@ import (
 func TestHandleScenarios_launchJeSors(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
-	h := NewHandler(actionService, core.NewStatusService(store), store, nil, nil)
+	h := NewHandler(actionService, core.NewStatusService(store), store, nil, nil, config.ArmoireConfig{})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/scenarios/2/launch", nil)
 	rec := httptest.NewRecorder()
@@ -43,7 +44,7 @@ func TestHandleScenarios_list(t *testing.T) {
 	store := data.NewMemoryStore()
 	store.SetValue("default", 591, "2")
 	actionService := core.NewActionService(store)
-	h := NewHandler(actionService, core.NewStatusService(store), store, nil, nil)
+	h := NewHandler(actionService, core.NewStatusService(store), store, nil, nil, config.ArmoireConfig{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/scenarios", nil)
 	rec := httptest.NewRecorder()
@@ -56,7 +57,7 @@ func TestHandleScenarios_list(t *testing.T) {
 
 func TestHandleScenarios_bitmasks(t *testing.T) {
 	store := data.NewMemoryStore()
-	h := NewHandler(core.NewActionService(store), core.NewStatusService(store), store, nil, nil)
+	h := NewHandler(core.NewActionService(store), core.NewStatusService(store), store, nil, nil, config.ArmoireConfig{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/scenarios/meta/bitmasks", nil)
 	rec := httptest.NewRecorder()
@@ -69,7 +70,7 @@ func TestHandleScenarios_bitmasks(t *testing.T) {
 
 func TestHandleScenarios_launchSlot1Rejected(t *testing.T) {
 	store := data.NewMemoryStore()
-	h := NewHandler(core.NewActionService(store), core.NewStatusService(store), store, nil, nil)
+	h := NewHandler(core.NewActionService(store), core.NewStatusService(store), store, nil, nil, config.ArmoireConfig{})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/scenarios/1/launch", nil)
 	rec := httptest.NewRecorder()

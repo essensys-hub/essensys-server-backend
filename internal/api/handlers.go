@@ -6,7 +6,9 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/essensys-hub/essensys-server-backend/internal/armoire"
 	"github.com/essensys-hub/essensys-server-backend/internal/cloudsync"
+	"github.com/essensys-hub/essensys-server-backend/internal/config"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
 	"github.com/essensys-hub/essensys-server-backend/internal/api/testmode"
@@ -61,28 +63,31 @@ type Handler struct {
 	store         data.Store
 	heatingSync   *core.HeatingSyncManager
 	cloudAgent    *cloudsync.Agent
+	armoireRotator *armoire.Rotator
+	armoireCfg     config.ArmoireConfig
 }
 
 // NewHandler creates a new Handler instance.
 // pullScheduler must be shared with cloudsync.Agent when cloud sync is enabled.
-func NewHandler(actionService *core.ActionService, statusService *core.StatusService, store data.Store, pullScheduler *core.ExchangePullScheduler, cloudAgent *cloudsync.Agent) *Handler {
+func NewHandler(actionService *core.ActionService, statusService *core.StatusService, store data.Store, pullScheduler *core.ExchangePullScheduler, cloudAgent *cloudsync.Agent, armoireCfg config.ArmoireConfig) *Handler {
 	if pullScheduler == nil {
 		pullScheduler = core.NewExchangePullScheduler()
 	}
 	return &Handler{
-		actionService: actionService,
-		statusService: statusService,
-		store:         store,
-		heatingSync:   pullScheduler,
-		cloudAgent:    cloudAgent,
+		actionService:  actionService,
+		statusService:  statusService,
+		store:          store,
+		heatingSync:    pullScheduler,
+		cloudAgent:     cloudAgent,
+		armoireRotator: armoire.NewRotator(armoireCfg.DashboardPullEnabled),
+		armoireCfg:     armoireCfg,
 	}
 }
 
 func defaultServerInfoIndices() []int {
-	return []int{613, 607, 615, 590, 349, 350, 351, 352, 363, 425, 426, 920,
-		566, 567, 568, 569, 570, 571, 572,
-		574, 575, 576, 577, 578,
-		582, 583, 584, 585}
+	out := make([]int, len(armoire.DefaultCommandIndices))
+	copy(out, armoire.DefaultCommandIndices)
+	return out
 }
 
 // GetServerInfos handles GET /api/serverinfos
@@ -92,6 +97,9 @@ func (h *Handler) GetServerInfos(w http.ResponseWriter, r *http.Request) {
 		indices = chunk
 		addDebugLog("Heating sync serverinfos chunk: %v", indices)
 		h.heatingSync.Advance()
+	} else if h.armoireRotator != nil && h.armoireRotator.Enabled() {
+		indices = h.armoireRotator.Next()
+		addDebugLog("Armoire dashboard serverinfos chunk: %v", indices)
 	}
 	// Planning chauffage (13–348) : rotation via POST /api/admin/heating/sync uniquement.
 	// Liste fixe ≤30 indices sinon firmware BP_MQX_ETH bloque le cycle Ethernet.

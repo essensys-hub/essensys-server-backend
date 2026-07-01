@@ -22,6 +22,13 @@ type Config struct {
     UniFi   UniFiConfig   `yaml:"unifi"`
     Cloud   CloudConfig   `yaml:"cloud"`
     LanIAM  LanIAMConfig  `yaml:"lan_iam"`
+    Armoire ArmoireConfig `yaml:"armoire"`
+}
+
+type ArmoireConfig struct {
+    DashboardPullEnabled    bool   `yaml:"dashboard_pull_enabled"`
+    OfflineThresholdSeconds int    `yaml:"offline_threshold_seconds"`
+    ClientID                string `yaml:"client_id"`
 }
 
 type LanIAMConfig struct {
@@ -165,6 +172,10 @@ func loadConfig(configFile string) (*Config, error) {
             BootstrapTokenFile: "/opt/data/config/lan_bootstrap.token",
             PassiveAuthCapture: false,
         },
+        Armoire: ArmoireConfig{
+            DashboardPullEnabled:    true,
+            OfflineThresholdSeconds: 6,
+        },
 	}
 
 	// Try to load from config file if it exists
@@ -243,6 +254,14 @@ func loadFromEnv(cfg *Config) {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.LanIAM.SessionTTLHours = n
 		}
+	}
+	if v := os.Getenv("ARMOIRE_DASHBOARD_PULL_ENABLED"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.Armoire.DashboardPullEnabled = b
+		}
+	}
+	if v := os.Getenv("ARMOIRE_CLIENT_ID"); v != "" {
+		cfg.Armoire.ClientID = v
 	}
 }
 

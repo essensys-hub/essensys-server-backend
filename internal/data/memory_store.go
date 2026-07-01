@@ -133,9 +133,10 @@ func NewClientData() *ClientData {
 
 // MemoryStore implements Store interface with in-memory storage
 type MemoryStore struct {
-	mu            sync.RWMutex
-	clients       map[string]*ClientData
-	globalActions *ActionQueue // Global action queue shared by all clients
+	mu                 sync.RWMutex
+	clients            map[string]*ClientData
+	globalActions      *ActionQueue // Global action queue shared by all clients
+	lastPolledClientID string
 }
 
 // NewMemoryStore creates a new MemoryStore instance
@@ -222,8 +223,34 @@ func (ms *MemoryStore) SetClientConnected(clientID string, connected bool) {
 	defer ms.mu.Unlock()
 	
 	client.IsConnected = connected
-	client.IsConnected = connected
 	client.LastSeen = time.Now()
+}
+
+func (ms *MemoryStore) RecordClientPoll(clientID string, at time.Time) {
+	client := ms.getOrCreateClient(clientID)
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	client.LastSeen = at
+	ms.lastPolledClientID = clientID
+}
+
+func (ms *MemoryStore) GetClientLastPoll(clientID string) (time.Time, bool) {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	client, exists := ms.clients[clientID]
+	if !exists {
+		return time.Time{}, false
+	}
+	return client.LastSeen, true
+}
+
+func (ms *MemoryStore) GetLastPolledClientID() (string, bool) {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	if ms.lastPolledClientID == "" {
+		return "", false
+	}
+	return ms.lastPolledClientID, true
 }
 
 // SetAuthInfo stores auth info 

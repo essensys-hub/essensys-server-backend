@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/essensys-hub/essensys-server-backend/internal/config"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
 )
@@ -25,7 +26,7 @@ func TestRouter_HealthCheck(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	// Create router with empty credentials (health check doesn't need auth)
 	router := testRouter(handler, map[string]string{}, false, store)
@@ -55,7 +56,7 @@ func TestRouter_AuthenticationRequired(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	// Create router with credentials
 	validCredentials := map[string]string{
@@ -90,7 +91,7 @@ func TestRouter_ValidAuthentication(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	// Create router with credentials
 	validCredentials := map[string]string{
@@ -119,7 +120,7 @@ func TestRouter_MiddlewareChain(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	// Create router
 	validCredentials := map[string]string{
@@ -152,7 +153,7 @@ func TestRouter_AuthenticationDisabled(t *testing.T) {
 	store := data.NewMemoryStore()
 	actionService := core.NewActionService(store)
 	statusService := core.NewStatusService(store)
-	handler := NewHandler(actionService, statusService, store, nil, nil)
+	handler := NewHandler(actionService, statusService, store, nil, nil, config.ArmoireConfig{})
 
 	// Create router with authentication disabled
 	router := testRouter(handler, map[string]string{}, false, store)

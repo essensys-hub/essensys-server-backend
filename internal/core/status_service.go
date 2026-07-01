@@ -3,6 +3,7 @@ package core
 import (
 	"github.com/essensys-hub/essensys-server-backend/internal/data"
 	"github.com/essensys-hub/essensys-server-backend/pkg/protocol"
+	"time"
 )
 
 // StatusService handles client status updates and exchange table operations
@@ -23,8 +24,9 @@ func (s *StatusService) UpdateStatus(clientID string, status protocol.StatusRequ
 	for _, kv := range status.EK {
 		s.store.SetValue(clientID, kv.K, kv.V)
 	}
-	
-	// Mark client as connected
+
+	now := time.Now()
+	s.store.RecordClientPoll(clientID, now)
 	s.store.SetClientConnected(clientID, true)
 	
 	return nil

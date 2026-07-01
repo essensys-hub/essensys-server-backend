@@ -197,6 +197,35 @@ func (rs *RedisStore) SetClientConnected(clientID string, connected bool) {
 	}
 }
 
+func (rs *RedisStore) getLastPollKey(clientID string) string {
+	return fmt.Sprintf("essensys:client:%s:last_poll", clientID)
+}
+
+func (rs *RedisStore) RecordClientPoll(clientID string, at time.Time) {
+	rs.client.Set(rs.ctx, rs.getLastPollKey(clientID), at.UTC().Format(time.RFC3339Nano), 0)
+	rs.client.Set(rs.ctx, "essensys:meta:last_polled_client", clientID, 0)
+}
+
+func (rs *RedisStore) GetClientLastPoll(clientID string) (time.Time, bool) {
+	val, err := rs.client.Get(rs.ctx, rs.getLastPollKey(clientID)).Result()
+	if err != nil {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339Nano, val)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+func (rs *RedisStore) GetLastPolledClientID() (string, bool) {
+	val, err := rs.client.Get(rs.ctx, "essensys:meta:last_polled_client").Result()
+	if err != nil || val == "" {
+		return "", false
+	}
+	return val, true
+}
+
 // -- Auth Info Management --
 
 func (rs *RedisStore) getAuthInfoKey(clientID string) string {
