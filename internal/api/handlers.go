@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/essensys-hub/essensys-server-backend/internal/armoire"
+	"github.com/essensys-hub/essensys-server-backend/internal/audit"
 	"github.com/essensys-hub/essensys-server-backend/internal/cloudsync"
 	"github.com/essensys-hub/essensys-server-backend/internal/config"
 	"github.com/essensys-hub/essensys-server-backend/internal/core"
@@ -65,6 +66,7 @@ type Handler struct {
 	cloudAgent    *cloudsync.Agent
 	armoireRotator *armoire.Rotator
 	armoireCfg     config.ArmoireConfig
+	audit          *audit.Service
 }
 
 // NewHandler creates a new Handler instance.
@@ -82,6 +84,10 @@ func NewHandler(actionService *core.ActionService, statusService *core.StatusSer
 		armoireRotator: armoire.NewRotator(armoireCfg.DashboardPullEnabled),
 		armoireCfg:     armoireCfg,
 	}
+}
+
+func (h *Handler) SetAuditService(svc *audit.Service) {
+	h.audit = svc
 }
 
 func defaultServerInfoIndices() []int {
@@ -234,6 +240,13 @@ func (h *Handler) PostDone(w http.ResponseWriter, r *http.Request) {
     // Sync action values to the store (Reference Table)
     // This ensures that when an action is done, the server state reflects the change immediately
     if action != nil {
+        if h.audit != nil && h.audit.Enabled() {
+            for _, param := range action.Params {
+                subjectKey := fmt.Sprintf("exchange:%d", param.K)
+                previousVal, _ := h.store.GetValue(clientID, param.K)
+                _ = h.audit.EmitFirmwareAck(r.Context(), clientID, guid, subjectKey, previousVal, param.V)
+            }
+        }
         for _, param := range action.Params {
             h.store.SetValue(clientID, param.K, param.V)
         }
@@ -299,6 +312,33 @@ func (h *Handler) PostAdminInject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	addDebugLog("Injected %d action(s): %v", len(guids), guids)
+
+	if h.audit != nil && h.audit.Enabled() {
+		actorID := audit.ActorIDFromRequest(r, clientID)
+		for _, p := range params {
+			subjectKey := fmt.Sprintf("exchange:%d", p.K)
+			previousVal, hadPrevious := h.store.GetValue(clientID, p.K)
+			details := map[string]any{
+				"guid":             guids[0],
+				"client_id":        clientID,
+				"lifecycle_status": "queued",
+				"ack_status":       "pending",
+				"requested_index":  p.K,
+				"requested_value":  p.V,
+			}
+			if hadPrevious {
+				details["previous_value"] = previousVal
+			}
+			if u, ok := audit.UserFromRequest(r); ok {
+				details["lan_user_id"] = u.ID
+				if u.DisplayName != "" {
+					details["display_name"] = u.DisplayName
+				}
+			}
+			// gateway_runtime (cpu, mem, load) — réservé pour instrumentation future
+			_ = h.audit.EmitUserAction(r.Context(), "lan_user", actorID, subjectKey, p.V, details)
+		}
+	}
 
 	response := map[string]any{
 		"status": "ok",

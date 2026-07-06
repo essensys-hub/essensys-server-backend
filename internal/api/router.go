@@ -17,6 +17,7 @@ type RouterConfig struct {
 	WebHandler         *WebHandler
 	UniFiHandler       *UniFiHandler
 	LanIAMHandler      *LanIAMHandler
+	AuditHandler       *AuditHandler
 	LanSessionStore    *laniam.SessionStore
 	LanIAMEnabled      bool
 	LanIAMReady        bool
@@ -25,6 +26,9 @@ type RouterConfig struct {
 	AuthEnabled        bool
 	PassiveAuthCapture bool
 	Store              data.Store
+	// PluginsHandler sert /api/plugins/* (framework de plugins). Monté derrière
+	// l'auth LAN existante. nil si aucun plugin n'est activé.
+	PluginsHandler http.Handler
 }
 
 // NewRouter creates and configures the HTTP router with all middleware and routes.
@@ -116,9 +120,29 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		apiMux.HandleFunc("/api/web/history/latest", cfg.WebHandler.GetHistoryLatest)
 	}
 
+	if cfg.AuditHandler != nil {
+		apiMux.Handle("/api/audit/events", protect(http.HandlerFunc(cfg.AuditHandler.ListEvents)))
+		apiMux.Handle("/api/audit/events/export", protect(http.HandlerFunc(cfg.AuditHandler.ExportEvents)))
+		apiMux.Handle("/api/audit/charter", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				cfg.AuditHandler.CharterStatus(w, r)
+			case http.MethodPost:
+				cfg.AuditHandler.AcceptCharter(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		})))
+		apiMux.Handle("/api/audit/integrity", adminOnly(http.HandlerFunc(cfg.AuditHandler.Integrity)))
+	}
+
 	if cfg.UniFiHandler != nil {
 		apiMux.Handle("/api/unifi/cameras", protect(http.HandlerFunc(cfg.UniFiHandler.GetCameras)))
 		apiMux.Handle("/api/unifi/cameras/", protect(http.HandlerFunc(cfg.UniFiHandler.GetCameraSnapshot)))
+	}
+
+	if cfg.PluginsHandler != nil {
+		apiMux.Handle("/api/plugins/", protect(cfg.PluginsHandler))
 	}
 
 	var apiHandler http.Handler = apiMux

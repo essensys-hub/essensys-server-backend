@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/essensys-hub/essensys-server-backend/internal/audit"
 	"github.com/essensys-hub/essensys-server-backend/internal/laniam"
 	"github.com/essensys-hub/essensys-server-backend/internal/middleware"
 	"github.com/essensys-hub/essensys-server-backend/internal/models"
@@ -15,10 +16,15 @@ import (
 type LanIAMHandler struct {
 	svc          *laniam.Service
 	secureCookie bool
+	audit        *audit.Service
 }
 
 func NewLanIAMHandler(svc *laniam.Service, secureCookie bool) *LanIAMHandler {
 	return &LanIAMHandler{svc: svc, secureCookie: secureCookie}
+}
+
+func (h *LanIAMHandler) SetAuditService(svc *audit.Service) {
+	h.audit = svc
 }
 
 func (h *LanIAMHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -46,6 +52,9 @@ func (h *LanIAMHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	h.svc.RecordLoginClient(user.ID, laniam.ClientIPFromRequest(r))
 	h.establishSession(w, user, http.StatusOK)
+	if h.audit != nil && h.audit.Enabled() {
+		_ = h.audit.EmitAuthEvent(r.Context(), user.Email, "auth:login", "success")
+	}
 }
 
 func (h *LanIAMHandler) AutoLogin(w http.ResponseWriter, r *http.Request) {
@@ -74,10 +83,17 @@ func (h *LanIAMHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	var logoutEmail string
 	if c, err := r.Cookie(middleware.LanSessionCookie); err == nil {
+		if sess, ok := h.svc.Sessions().GetSession(c.Value); ok && sess.User != nil {
+			logoutEmail = sess.User.Email
+		}
 		h.svc.Sessions().DeleteSession(c.Value)
 	}
 	middleware.ClearLanSessionCookie(w, h.secureCookie)
+	if h.audit != nil && h.audit.Enabled() && logoutEmail != "" {
+		_ = h.audit.EmitAuthEvent(r.Context(), logoutEmail, "auth:logout", "success")
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 

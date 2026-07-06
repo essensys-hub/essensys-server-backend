@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/essensys-hub/essensys-server-backend/internal/api"
+	"github.com/essensys-hub/essensys-server-backend/internal/audit"
 	"github.com/essensys-hub/essensys-server-backend/internal/auth"
 	"github.com/essensys-hub/essensys-server-backend/internal/cloudsync"
 	"github.com/essensys-hub/essensys-server-backend/internal/config"
@@ -21,9 +23,11 @@ import (
 	"github.com/essensys-hub/essensys-server-backend/internal/laniam"
 	"github.com/essensys-hub/essensys-server-backend/internal/metrics"
 	"github.com/essensys-hub/essensys-server-backend/internal/mqtt"
+	"github.com/essensys-hub/essensys-server-backend/internal/plugins"
 	"github.com/essensys-hub/essensys-server-backend/internal/server"
 	"github.com/essensys-hub/essensys-server-backend/internal/unifi"
 
+	plugin "github.com/essensys-hub/essensys-plugin-framework/go"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
@@ -151,8 +155,38 @@ func main() {
 
 	var webHandler *api.WebHandler
 	var lanIAMHandler *api.LanIAMHandler
+	var auditHandler *api.AuditHandler
 	var lanSessionStore *laniam.SessionStore
+	var auditSvc *audit.Service
 	lanIAMReady := false
+
+	if cfg.Audit.Enabled && db != nil {
+		machineID := cfg.Audit.MachineID
+		if machineID == 0 {
+			machineID = cfg.Cloud.MachineID
+		}
+		if machineID > 0 {
+			outbox := audit.NewOutboxRepository(db)
+			auditSvc = audit.NewService(audit.Config{
+				ServiceURL: cfg.Audit.ServiceURL,
+				APIToken:   cfg.Audit.APIToken,
+				MachineID:  machineID,
+				GatewayID:  cfg.Cloud.GatewayID,
+			}, outbox)
+			handler.SetAuditService(auditSvc)
+			charterRepo := audit.NewCharterRepository(db)
+			auditHandler = api.NewAuditHandler(
+				audit.NewAuthorizer(charterRepo),
+				audit.NewEventRepository(db),
+				charterRepo,
+				machineID,
+				auditSvc,
+			)
+			log.Printf("Initialized audit trail (machine_id=%d, service=%s)", machineID, cfg.Audit.ServiceURL)
+		} else {
+			log.Printf("WARNING: audit.enabled but machine_id unset — audit disabled")
+		}
+	}
 
 	if cfg.LanIAM.Enabled {
 		if db == nil {
@@ -164,6 +198,9 @@ func main() {
 			loginClientRepo := laniam.NewLoginClientRepository(db)
 			lanSvc := laniam.NewService(lanRepo, trustedDeviceRepo, loginClientRepo, laniam.NewNeighbourResolver(), lanSessionStore, cfg.LanIAM.BootstrapTokenFile)
 			lanIAMHandler = api.NewLanIAMHandler(lanSvc, cfg.LanIAM.SecureCookie)
+			if auditSvc != nil {
+				lanIAMHandler.SetAuditService(auditSvc)
+			}
 			lanIAMReady = true
 			log.Printf("Initialized LAN IAM (session TTL %dh)", cfg.LanIAM.SessionTTLHours)
 		}
@@ -192,11 +229,35 @@ func main() {
 		passiveCapture = false
 	}
 
+	// Framework de plugins (Sungrow, etc.) — lecture seule, sous /api/plugins/*.
+	var pluginsHandler http.Handler
+	{
+		var bus plugin.Bus
+		if mqttClient != nil {
+			bus = plugins.NewMQTTBus(func(topic string, h func(topic string, payload []byte)) error {
+				return mqttClient.Subscribe(topic, h)
+			})
+		}
+		_, ph, perr := plugins.New(plugins.Deps{
+			Store: plugins.NewRedisStore(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.DB, 90*time.Second),
+			Sink:  plugins.NewPromSink(),
+			Bus:   bus,
+		})
+		if perr != nil {
+			log.Printf("WARNING: framework de plugins non initialisé: %v", perr)
+		} else {
+			pluginsHandler = ph
+			log.Println("Framework de plugins activé (/api/plugins/*)")
+		}
+	}
+
 	router := api.NewRouter(api.RouterConfig{
 		Handler:            handler,
+		PluginsHandler:     pluginsHandler,
 		WebHandler:         webHandler,
 		UniFiHandler:       unifiHandler,
 		LanIAMHandler:      lanIAMHandler,
+		AuditHandler:       auditHandler,
 		LanSessionStore:    lanSessionStore,
 		LanIAMEnabled:      cfg.LanIAM.Enabled && lanIAMReady,
 		LanIAMReady:        lanIAMReady,

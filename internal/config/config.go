@@ -23,6 +23,14 @@ type Config struct {
     Cloud   CloudConfig   `yaml:"cloud"`
     LanIAM  LanIAMConfig  `yaml:"lan_iam"`
     Armoire ArmoireConfig `yaml:"armoire"`
+    Audit   AuditConfig   `yaml:"audit"`
+}
+
+type AuditConfig struct {
+    Enabled    bool   `yaml:"enabled"`
+    ServiceURL string `yaml:"service_url"`
+    APIToken   string `yaml:"api_token"`
+    MachineID  int    `yaml:"machine_id"`
 }
 
 type ArmoireConfig struct {
@@ -175,6 +183,10 @@ func loadConfig(configFile string) (*Config, error) {
         Armoire: ArmoireConfig{
             DashboardPullEnabled:    true,
             OfflineThresholdSeconds: 6,
+        },
+        Audit: AuditConfig{
+            Enabled:    false,
+            ServiceURL: "http://127.0.0.1:8095",
         },
 	}
 

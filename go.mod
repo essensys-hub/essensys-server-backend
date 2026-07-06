@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/eclipse/paho.mqtt.golang v1.4.3
+	github.com/essensys-hub/essensys-audit-collector v0.0.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
 	github.com/jmoiron/sqlx v1.4.0
@@ -37,3 +38,16 @@ require (
 	golang.org/x/sys v0.46.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 )
+
+replace github.com/essensys-hub/essensys-audit-collector => ../essensys-audit-collector
+
+// --- Framework de plugins Essensys (dev local, layout monorepo-parent) ---
+// En CI/prod, remplacer ces replace par des versions taguées publiées.
+require (
+	github.com/essensys-hub/essensys-plugin-framework/go v0.0.0
+	github.com/essensys-hub/essensys-plugin-sungrow/adapter v0.0.0
+)
+
+replace github.com/essensys-hub/essensys-plugin-framework/go => ../essensys-plugin-framework/go
+
+replace github.com/essensys-hub/essensys-plugin-sungrow/adapter => ../essensys-plugin-sungrow/adapter
