@@ -84,7 +84,9 @@ func mapRole(role string) (plugin.Identity, bool) {
 // lus depuis un répertoire de config déployé ; ici ils accompagnent l'adaptateur.
 func manifests() []plugin.Manifest {
 	sg := plugin.Manifest{
-		ID: sungrow.ID, Name: "Solaire", ManifestVersion: 1, FrameworkVersion: "^1.0",
+		ID: sungrow.ID, Name: "Solaire", Version: sungrow.Version,
+		Description: "Production photovoltaïque Sungrow (onduleur SH-RS + batterie SBR) : tableau de bord, schéma de flux, autoconsommation.",
+		ManifestVersion: 1, FrameworkVersion: "^1.0",
 		Capabilities: []string{"metrics", "device-poll", "ui-tile", "ui-page"},
 		Perimeters:   []plugin.Perimeter{plugin.PerimeterLANCM5, plugin.PerimeterHubCloudsync},
 		Visibility: []plugin.Role{
@@ -174,6 +176,35 @@ func (s redisStore) Put(pluginID, machineID string, samples []plugin.Sample, at 
 
 func (s redisStore) histKey(pluginID, metric string) string {
 	return "essensys:plugins:" + pluginID + ":hist:" + metric
+}
+
+// SetEnabled / PersistedEnabled implémentent plugin.StateStore : l'état
+// activé/désactivé survit aux redémarrages du backend.
+func (s redisStore) SetEnabled(pluginID string, enabled bool) {
+	v := "1"
+	if !enabled {
+		v = "0"
+	}
+	s.c.Set(context.Background(), "essensys:plugins:"+pluginID+":enabled", v, 0)
+}
+
+func (s redisStore) PersistedEnabled(pluginID string) (bool, bool) {
+	v, err := s.c.Get(context.Background(), "essensys:plugins:"+pluginID+":enabled").Result()
+	if err != nil {
+		return false, false
+	}
+	return v == "1", true
+}
+
+// Purge implémente plugin.PurgeStore : efface snapshot + historique du plugin
+// (désinstallation côté données ; l'état enabled persisté est conservé).
+func (s redisStore) Purge(pluginID string) {
+	ctx := context.Background()
+	keys, err := s.c.Keys(ctx, "essensys:plugins:"+pluginID+":hist:*").Result()
+	if err == nil && len(keys) > 0 {
+		s.c.Del(ctx, keys...)
+	}
+	s.c.Del(ctx, s.key(pluginID))
 }
 
 // History implémente plugin.HistoryProvider (route /api/plugins/<id>/history).
