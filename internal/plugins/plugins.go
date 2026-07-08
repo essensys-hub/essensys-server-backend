@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -129,17 +130,29 @@ func parseTopic(topic string) (id, machine string) {
 type redisStore struct {
 	c        *redis.Client
 	staleTTL time.Duration
+	mu       *sync.Mutex
 }
 
 // NewRedisStore crée un Store plugin adossé à Redis (clés essensys:plugins:*).
 func NewRedisStore(addr, password string, db int, staleTTL time.Duration) plugin.Store {
-	return redisStore{c: redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db}), staleTTL: staleTTL}
+	return redisStore{c: redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db}), staleTTL: staleTTL, mu: &sync.Mutex{}}
 }
 
 func (s redisStore) key(pluginID string) string { return "essensys:plugins:" + pluginID + ":current" }
 
 func (s redisStore) Put(pluginID, machineID string, samples []plugin.Sample, at time.Time) {
-	b, err := json.Marshal(plugin.Reading{PluginID: pluginID, Samples: samples, UpdatedAt: at})
+	// Un message MQTT ne porte qu'une série : fusion avec le snapshot courant
+	// (upsert par machine|metric), sérialisée pour éviter les pertes croisées.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var existing []plugin.Sample
+	if v, err := s.c.Get(context.Background(), s.key(pluginID)).Bytes(); err == nil {
+		var prev plugin.Reading
+		if json.Unmarshal(v, &prev) == nil {
+			existing = prev.Samples
+		}
+	}
+	b, err := json.Marshal(plugin.Reading{PluginID: pluginID, Samples: plugin.MergeSamples(existing, samples), UpdatedAt: at})
 	if err != nil {
 		return
 	}
