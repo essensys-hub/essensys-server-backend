@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -156,7 +157,59 @@ func (s redisStore) Put(pluginID, machineID string, samples []plugin.Sample, at 
 	if err != nil {
 		return
 	}
-	s.c.Set(context.Background(), s.key(pluginID), b, 0)
+	ctx := context.Background()
+	s.c.Set(ctx, s.key(pluginID), b, 0)
+	// Historisation 48 h pour les courbes (route /history).
+	for _, sm := range samples {
+		ts := sm.TS
+		if ts.IsZero() {
+			ts = at
+		}
+		hk := s.histKey(pluginID, sm.Metric)
+		s.c.ZAdd(ctx, hk, &redis.Z{Score: float64(ts.Unix()), Member: strconv.FormatInt(ts.Unix(), 10) + "|" + strconv.FormatFloat(sm.Value, 'f', -1, 64)})
+		s.c.ZRemRangeByScore(ctx, hk, "0", strconv.FormatInt(at.Add(-48*time.Hour).Unix(), 10))
+		s.c.Expire(ctx, hk, 72*time.Hour)
+	}
+}
+
+func (s redisStore) histKey(pluginID, metric string) string {
+	return "essensys:plugins:" + pluginID + ":hist:" + metric
+}
+
+// History implémente plugin.HistoryProvider (route /api/plugins/<id>/history).
+func (s redisStore) History(pluginID, metric string, since time.Time) []plugin.Point {
+	vals, err := s.c.ZRangeByScore(context.Background(), s.histKey(pluginID, metric), &redis.ZRangeBy{
+		Min: strconv.FormatInt(since.Unix(), 10), Max: "+inf",
+	}).Result()
+	if err != nil {
+		return nil
+	}
+	pts := make([]plugin.Point, 0, len(vals))
+	for _, v := range vals {
+		parts := strings.SplitN(v, "|", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		sec, err1 := strconv.ParseInt(parts[0], 10, 64)
+		val, err2 := strconv.ParseFloat(parts[1], 64)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		pts = append(pts, plugin.Point{TS: time.Unix(sec, 0), Value: val})
+	}
+	// Sous-échantillonnage : ~200 points suffisent pour la courbe du jour.
+	if len(pts) > 200 {
+		step := len(pts) / 200
+		ds := make([]plugin.Point, 0, 201)
+		for i := 0; i < len(pts); i += step {
+			ds = append(ds, pts[i])
+		}
+		if ds[len(ds)-1] != pts[len(pts)-1] {
+			ds = append(ds, pts[len(pts)-1])
+		}
+		pts = ds
+	}
+	return pts
 }
 
 func (s redisStore) Current(pluginID string) plugin.Reading {
