@@ -26,16 +26,18 @@ import (
 
 // Deps regroupe les ports fournis par l'application hôte.
 type Deps struct {
-	Store plugin.Store      // last-value (Redis en prod)
-	Sink  plugin.MetricSink // séries (Prometheus en prod)
-	Bus   plugin.Bus        // ingestion (MQTT en prod) ; nil si MQTT désactivé
+	Store         plugin.Store      // last-value (Redis en prod)
+	Sink          plugin.MetricSink // séries (Prometheus en prod)
+	Bus           plugin.Bus        // ingestion (MQTT en prod) ; nil si MQTT désactivé
+	PrometheusURL string            // API HTTP Prometheus pour l'historique week/month/year
 }
 
 // New construit le registre, enregistre les plugins compilés, configure leurs
 // manifests, s'abonne au bus (si présent) et renvoie le handler HTTP à monter
 // sous /api/plugins/ (derrière l'auth LAN existante).
 func New(d Deps) (*plugin.Registry, http.Handler, error) {
-	reg := plugin.New(d.Store, d.Sink)
+	store := WrapHistory(d.Store, d.PrometheusURL)
+	reg := plugin.New(store, d.Sink)
 
 	// Enregistrement compilé des adaptateurs.
 	reg.Register(sungrow.New())
@@ -229,18 +231,7 @@ func (s redisStore) History(pluginID, metric string, since time.Time) []plugin.P
 		pts = append(pts, plugin.Point{TS: time.Unix(sec, 0), Value: val})
 	}
 	// Sous-échantillonnage : ~200 points suffisent pour la courbe du jour.
-	if len(pts) > 200 {
-		step := len(pts) / 200
-		ds := make([]plugin.Point, 0, 201)
-		for i := 0; i < len(pts); i += step {
-			ds = append(ds, pts[i])
-		}
-		if ds[len(ds)-1] != pts[len(pts)-1] {
-			ds = append(ds, pts[len(pts)-1])
-		}
-		pts = ds
-	}
-	return pts
+	return downsample(pts, 200)
 }
 
 func (s redisStore) Current(pluginID string) plugin.Reading {

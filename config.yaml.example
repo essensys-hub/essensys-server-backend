@@ -68,3 +68,8 @@ lan_iam:
   secure_cookie: true
   bootstrap_token_file: /opt/data/config/lan_bootstrap.token
   passive_auth_capture: false
+
+plugins:
+  # API HTTP Prometheus, utilisée pour l'historique long terme (week/month/year)
+  # des métriques de plugins. L'historique du jour reste servi par Redis (48 h).
+  prometheus_url: "http://127.0.0.1:9090"

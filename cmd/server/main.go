@@ -239,9 +239,10 @@ func main() {
 			})
 		}
 		_, ph, perr := plugins.New(plugins.Deps{
-			Store: plugins.NewRedisStore(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.DB, 90*time.Second),
-			Sink:  plugins.NewPromSink(),
-			Bus:   bus,
+			Store:         plugins.NewRedisStore(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.DB, 90*time.Second),
+			Sink:          plugins.NewPromSink(),
+			Bus:           bus,
+			PrometheusURL: cfg.Plugins.PrometheusURL,
 		})
 		if perr != nil {
 			log.Printf("WARNING: framework de plugins non initialisé: %v", perr)

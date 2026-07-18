@@ -24,6 +24,12 @@ type Config struct {
     LanIAM  LanIAMConfig  `yaml:"lan_iam"`
     Armoire ArmoireConfig `yaml:"armoire"`
     Audit   AuditConfig   `yaml:"audit"`
+    Plugins PluginsConfig `yaml:"plugins"`
+}
+
+// PluginsConfig configure le framework de plugins (historique long terme, etc.).
+type PluginsConfig struct {
+    PrometheusURL string `yaml:"prometheus_url"`
 }
 
 type AuditConfig struct {
@@ -187,6 +193,9 @@ func loadConfig(configFile string) (*Config, error) {
         Audit: AuditConfig{
             Enabled:    false,
             ServiceURL: "http://127.0.0.1:8095",
+        },
+        Plugins: PluginsConfig{
+            PrometheusURL: "http://127.0.0.1:9090",
         },
 	}
 
