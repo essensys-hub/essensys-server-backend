@@ -1,0 +1,6 @@
+schema: spec-driven
+
+context: |
+  Essensys — backend de la gateway locale (Go, Raspberry Pi) : /api/admin/*, /api/scenarios*, dialogue avec le BP de l'armoire (table d'échange, actions, snapshot).
+  Gouvernance : essensys-feature-lifecycle/claude/GOVERNANCE.md (ticket GitHub Project #6, OpenSpec, /checkup, tests NR-*, jamais d'armoire réelle en test). Conventional commits référençant l'issue (#n). Français.
+  Commandes domotiques = injection k/v dans la table d'échange (indices legacy IoT : ne jamais les modifier).

@@ -18,8 +18,8 @@ func TestGenerateCompleteBlock_WithLightIndex(t *testing.T) {
 
 	result := service.GenerateCompleteBlock(input)
 
-	// Should have 19 parameters: 590 + (605-622)
-	expectedCount := 19
+	// Should have 20 parameters: 590 + (605-623)
+	expectedCount := 20
 	if len(result) != expectedCount {
 		t.Errorf("Expected %d parameters, got %d", expectedCount, len(result))
 	}

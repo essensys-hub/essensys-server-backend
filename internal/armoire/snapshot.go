@@ -39,14 +39,16 @@ type SystemBlock struct {
 }
 
 type AlarmBlock struct {
-	Mode       string `json:"mode,omitempty"`
-	Step       string `json:"step,omitempty"`
-	Armed      bool   `json:"armed"`
-	Triggered  bool   `json:"triggered"`
-	WaterLeak  bool   `json:"water_leak"`
-	Detection  string `json:"detection,omitempty"`
-	Fraud      string `json:"fraud,omitempty"`
-	BPState    string `json:"bp_state,omitempty"`
+	Mode      string `json:"mode,omitempty"`
+	Step      string `json:"step,omitempty"`
+	Armed     bool   `json:"armed"`
+	Triggered bool   `json:"triggered"`
+	WaterLeak bool   `json:"water_leak"`
+	Detection string `json:"detection,omitempty"`
+	Fraud     string `json:"fraud,omitempty"`
+	BPState   string `json:"bp_state,omitempty"`
+	// SecurityOutlets is Securite_PriseCoupe (440): cut, piloted or unknown.
+	SecurityOutlets string `json:"security_outlets"`
 }
 
 type HeatingZone struct {
@@ -202,7 +204,20 @@ func decodeAlarm(vals map[string]string) AlarmBlock {
 	if v, ok := vals["920"]; ok {
 		b.BPState = decodeBPState(v)
 	}
+	b.SecurityOutlets = decodeSecurityOutlets(vals["440"])
 	return b
+}
+
+// decodeSecurityOutlets maps Securite_PriseCoupe (440): 1 = cut, 0 = piloted.
+func decodeSecurityOutlets(v string) string {
+	switch strings.TrimSpace(v) {
+	case "1":
+		return "cut"
+	case "0":
+		return "piloted"
+	default:
+		return "unknown"
+	}
 }
 
 func decodeComfort(vals map[string]string) ComfortBlock {
