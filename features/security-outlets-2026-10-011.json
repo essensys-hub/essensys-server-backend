@@ -28,10 +28,9 @@
     "paths": [
       "internal/core/action_service.go",
       "internal/armoire/pull_groups.go",
-      "internal/armoire/rotator.go",
       "internal/armoire/snapshot.go",
-      "internal/armoire/decode.go",
-      "cmd/mcp-server/main.go"
+      "cmd/mcp-server/main.go",
+      "pkg/protocol/constants.go"
     ],
     "primary_surface": "api"
   },
@@ -46,7 +45,11 @@
   "tests": {
     "playwright": [],
     "junit": [
-      "internal/core/action_service_test.go"
+      "internal/core/action_service_test.go",
+      "internal/core/security_outlets_test.go",
+      "internal/armoire/decode_test.go",
+      "internal/cloudsync/push_filter_test.go",
+      "cmd/mcp-server/expand_test.go"
     ],
     "coverage_must_test": [
       "coupure seule complete 590 et 605 a 622",

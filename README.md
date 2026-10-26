@@ -658,6 +658,7 @@ The server automatically processes injected actions:
 1. **Complete Block Generation:** If any index is in range 605-622 (lights/shutters), all indices 605-622 are included with default value "0" for missing indices
 2. **Scenario Trigger:** Index 590 with value "1" is automatically added for light/shutter actions
 3. **Parameter Ordering:** Parameters are sorted by ascending index number
+4. **Security Outlets (623):** `623 = "1"` cuts and `623 = "2"` restores the security outlets; the server completes it into the same block. Every light/shutter command carries `623 = "0"`, so it can never replay a previous cut. The outlet state (index 440: `1` = cut, `0` = piloted) is polled with the health indices, exposed as `alarm.security_outlets` (`cut`, `piloted`, `unknown`) by `GET /api/admin/armoire/snapshot`, and pushed to the cloud by the « Prises de sécurité » sync profile.
 
 **Example - Turning on Bedroom 3 Light:**
 
@@ -678,7 +679,8 @@ curl -X POST http://localhost/api/admin/inject \
 #     ...
 #     {"k": 613, "v": "64"},  // Your target value
 #     ...
-#     {"k": 622, "v": "0"}
+#     {"k": 622, "v": "0"},
+#     {"k": 623, "v": "0"}    // Security outlets untouched (auto-added)
 #   ]
 # }
 ```

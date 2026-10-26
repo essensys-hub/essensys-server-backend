@@ -64,3 +64,19 @@ func TestFindScenariosProfile(t *testing.T) {
 		t.Fatal("expected Scénarios profile")
 	}
 }
+
+// security-outlets-2026-10-011 (#11): the default "Prises de sécurité" profile
+// created by the cloud migration makes the gateway push 440.
+func TestPushIndicesFromProfilesList_prisesDeSecurite(t *testing.T) {
+	profiles := []cloudSyncProfile{
+		{Name: "Scénarios", Enabled: true, PushToCloud: true, IndexRanges: [][2]int{{591, 595}}, ExcludeIndices: []int{590}},
+		{Name: "Prises de sécurité", Enabled: true, PushToCloud: true, PullFromArmoire: true, IndexRanges: [][2]int{{440, 440}}},
+	}
+	pushed := false
+	for _, k := range pushIndicesFromProfilesList(profiles) {
+		pushed = pushed || k == 440
+	}
+	if !pushed {
+		t.Fatal("440 must be pushed to the cloud")
+	}
+}

@@ -47,10 +47,14 @@ type exchangeKV struct {
 	V string `json:"v"`
 }
 
+// expandLegacyScenarioBlock mirrors ActionService.GenerateCompleteBlock: a
+// light, shutter or security command (605..624) gets 590=1 and the missing
+// 605..623 indices at "0", so 623/624 are never sent alone and a light command
+// never replays a cut of the security outlets.
 func expandLegacyScenarioBlock(params []exchangeKV) []exchangeKV {
 	hasLightShutterIndex := false
 	for _, p := range params {
-		if p.K >= 605 && p.K <= 622 {
+		if p.K >= 605 && p.K <= 624 {
 			hasLightShutterIndex = true
 			break
 		}
@@ -64,11 +68,11 @@ func expandLegacyScenarioBlock(params []exchangeKV) []exchangeKV {
 		byIndex[p.K] = p.V
 	}
 
-	// BP_MQX_ETH expects full scenario trigger + complete 605..622 block.
+	// BP_MQX_ETH expects full scenario trigger + complete 605..622 block (+ 623).
 	if _, exists := byIndex[590]; !exists {
 		byIndex[590] = "1"
 	}
-	for i := 605; i <= 622; i++ {
+	for i := 605; i <= 623; i++ {
 		if _, exists := byIndex[i]; !exists {
 			byIndex[i] = "0"
 		}

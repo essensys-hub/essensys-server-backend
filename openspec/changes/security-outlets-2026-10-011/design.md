@@ -24,7 +24,7 @@ Même règle que le cloud dans `GenerateCompleteBlock` (déclencheur 605–623, 
 440 ajouté au groupe `HealthIndices` de `pull_groups.go` (rotation `serverinfos`) et à `SnapshotIndices` ; `decode.go` gagne `securityOutletsLabel` et `snapshot.go` un champ `SecurityOutlets` dans `AlarmBlock`. Test `NR-server-backend-24` sur le décodage (1 → cut, 0 → piloted, autre → unknown).
 
 ### D3 — Poussée cloud
-Migration `0xx_security_outlets_sync_profile.sql` : profil « Prises de sécurité » [440, 440], pull + push, activé, idempotente (`ON CONFLICT DO NOTHING`).
+Migration `016_security_outlets_sync_profile.sql` dans essensys-user-portal-backend, où vivent les profils (`sync_profiles`, migrations 007 et 009) : profil « Prises de sécurité » [440, 440], pull + push, activé, idempotente (`WHERE NOT EXISTS`, les migrations étant rejouées à chaque démarrage). La gateway récupère les profils par `sync-config` et pousse 440 avec les autres clés (`pushIndicesFromProfilesList`).
 
 ### D4 — MCP
 `cmd/mcp-server/main.go` réutilise le complément de `core` au lieu de sa copie locale, pour que les commandes 623 (et 624) soient déclenchées.

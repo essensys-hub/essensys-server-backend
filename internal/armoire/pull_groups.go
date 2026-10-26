@@ -18,10 +18,11 @@ var IdentityIndices = []int{
 	947, 948, 949, 950, 951, 952,
 }
 
-// HealthIndices: system status, alarm state, comm faults.
+// HealthIndices: system status, alarm state, security outlets, comm faults.
 var HealthIndices = []int{
 	10, 11, 12,
 	408, 413, 414, 415,
+	440,
 	920,
 }
 
@@ -38,7 +39,7 @@ var SnapshotIndices = []int{
 	0, 1, 5, 6, 7, 8, 9,
 	10, 11, 12,
 	349, 350, 351, 352, 353,
-	363, 408, 413, 414, 415, 459, 591,
+	363, 408, 413, 414, 415, 440, 459, 591,
 	460, 461, 463, 464,
 	920, 940, 945,
 	947, 948, 949, 950, 951, 952,

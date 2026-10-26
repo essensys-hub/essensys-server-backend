@@ -77,3 +77,31 @@ func TestBuildSnapshot_ExcludesAlarmCodes(t *testing.T) {
 		}
 	}
 }
+
+// NR: NR-server-backend-24 essensys-hub/essensys-server-backend#11
+// security-outlets-2026-10-011: the security outlet state (440) is polled with
+// the health indices and decoded in the snapshot alarm block.
+func Test_NR_server_backend_24_etat_des_prises_440(t *testing.T) {
+	for v, want := range map[string]string{"1": "cut", "0": "piloted", "": "unknown", "7": "unknown"} {
+		if got := decodeSecurityOutlets(v); got != want {
+			t.Fatalf("440=%q: got %q, want %q", v, got, want)
+		}
+	}
+	polled := false
+	for _, k := range HealthIndices {
+		polled = polled || k == 440
+	}
+	if !polled {
+		t.Fatal("440 must be part of the serverinfos health rotation")
+	}
+
+	store := data.NewMemoryStore()
+	store.RecordClientPoll("dev1", time.Now())
+	if got := BuildSnapshot(store, SnapshotOptions{ClientID: "dev1"}).Alarm.SecurityOutlets; got != "unknown" {
+		t.Fatalf("440 never read: got %q, want unknown", got)
+	}
+	store.SetValue("dev1", 440, "1")
+	if got := BuildSnapshot(store, SnapshotOptions{ClientID: "dev1"}).Alarm.SecurityOutlets; got != "cut" {
+		t.Fatalf("440=1: got %q, want cut", got)
+	}
+}

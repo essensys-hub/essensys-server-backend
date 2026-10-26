@@ -153,14 +153,16 @@ func (s *ActionService) BitwiseFusion(index int, existing, new string) string {
 	return new
 }
 
-// GenerateCompleteBlock ensures all indices 605-622 are present
+// GenerateCompleteBlock ensures all indices 605-623 are present
 // CRITICAL: This function MUST generate ALL indices from 605 to 622
 // The BP_MQX_ETH client will IGNORE the action if ANY index from 605-622 is missing!
+// 623 (security outlets) is completed to "0" so that a light command never
+// replays a previous cut (security-outlets-2026-10-011).
 func (s *ActionService) GenerateCompleteBlock(params []protocol.ExchangeKV) []protocol.ExchangeKV {
-	// Check if any parameter is in the light/shutter range (605-622)
+	// Check if any parameter is in the light/shutter/security outlet range (605-623)
 	hasLightShutterIndex := false
 	for _, param := range params {
-		if param.K >= protocol.IndexLightStart && param.K <= protocol.IndexLightEnd {
+		if param.K >= protocol.IndexLightStart && param.K <= protocol.IndexSecurityOutlets {
 			hasLightShutterIndex = true
 			break
 		}
@@ -185,8 +187,8 @@ func (s *ActionService) GenerateCompleteBlock(params []protocol.ExchangeKV) []pr
 		explicitValues[protocol.IndexScenario] = "1"
 	}
 
-	// Ensure all indices from 605 to 622 are present
-	for i := protocol.IndexLightStart; i <= protocol.IndexLightEnd; i++ {
+	// Ensure all indices from 605 to 623 are present
+	for i := protocol.IndexLightStart; i <= protocol.IndexSecurityOutlets; i++ {
 		if _, exists := explicitValues[i]; !exists {
 			explicitValues[i] = "0"
 		}
