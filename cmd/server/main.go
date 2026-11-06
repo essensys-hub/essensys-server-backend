@@ -196,6 +196,8 @@ func main() {
 			lanRepo := laniam.NewUserRepository(db)
 			trustedDeviceRepo := laniam.NewTrustedDeviceRepository(db)
 			loginClientRepo := laniam.NewLoginClientRepository(db)
+			lanSessionStore.SetRememberStore(laniam.NewRememberSessionRepository(db), lanRepo.GetByID)
+			go lanSessionStore.RunRememberPurge(cloudCtx, 24*time.Hour)
 			lanSvc := laniam.NewService(lanRepo, trustedDeviceRepo, loginClientRepo, laniam.NewNeighbourResolver(), lanSessionStore, cfg.LanIAM.BootstrapTokenFile)
 			lanIAMHandler = api.NewLanIAMHandler(lanSvc, cfg.LanIAM.SecureCookie)
 			if auditSvc != nil {

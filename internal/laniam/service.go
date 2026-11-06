@@ -2,6 +2,7 @@ package laniam
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"sort"
 	"strings"
@@ -215,8 +216,7 @@ func (s *Service) ChangePassword(userID int, currentPlain, newPlain string) erro
 	if err := s.repo.UpdatePassword(userID, hash, algo); err != nil {
 		return err
 	}
-	s.sessions.DeleteSessionsForUser(userID)
-	return nil
+	return s.revokeSessions(userID)
 }
 
 func (s *Service) ResetPassword(admin *models.LanUser, targetID int, newPlain string) error {
@@ -237,8 +237,7 @@ func (s *Service) ResetPassword(admin *models.LanUser, targetID int, newPlain st
 	if err := s.repo.UpdatePassword(targetID, hash, algo); err != nil {
 		return err
 	}
-	s.sessions.DeleteSessionsForUser(targetID)
-	return nil
+	return s.revokeSessions(targetID)
 }
 
 func (s *Service) DisableUser(admin *models.LanUser, targetID int) error {
@@ -264,8 +263,7 @@ func (s *Service) DisableUser(admin *models.LanUser, targetID int) error {
 	if err := s.repo.SetDisabled(targetID, true); err != nil {
 		return err
 	}
-	s.sessions.DeleteSessionsForUser(targetID)
-	return nil
+	return s.revokeSessions(targetID)
 }
 
 func (s *Service) EnableUser(admin *models.LanUser, targetID int) error {
@@ -420,6 +418,16 @@ func (s *Service) RevokeTrustedDeviceAdmin(admin *models.LanUser, deviceID int) 
 		return fmt.Errorf("trusted devices unavailable")
 	}
 	return s.trustedRepo.RevokeByID(deviceID)
+}
+
+// revokeSessions supprime toutes les sessions d'un utilisateur, mémorisées comprises. L'erreur
+// brute n'est pas renvoyée : elle viendrait de la base et finirait dans une réponse HTTP.
+func (s *Service) revokeSessions(userID int) error {
+	if err := s.sessions.DeleteSessionsForUser(userID); err != nil {
+		log.Printf("laniam: revoking sessions of user %d failed: %v", userID, err)
+		return fmt.Errorf("session revocation failed")
+	}
+	return nil
 }
 
 func (s *Service) Repo() userRepository    { return s.repo }
