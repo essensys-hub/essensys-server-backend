@@ -3,9 +3,11 @@ package api
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/essensys-hub/essensys-server-backend/internal/audit"
 	"github.com/essensys-hub/essensys-server-backend/internal/laniam"
@@ -33,8 +35,9 @@ func (h *LanIAMHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email      string `json:"email"`
+		Password   string `json:"password"`
+		RememberMe bool   `json:"remember_me"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -51,7 +54,13 @@ func (h *LanIAMHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.svc.RecordLoginClient(user.ID, laniam.ClientIPFromRequest(r))
-	h.establishSession(w, user, http.StatusOK)
+	if req.RememberMe && h.svc.Sessions().RememberEnabled() {
+		if !h.establishRememberedSession(w, r, user) {
+			return
+		}
+	} else {
+		h.establishSession(w, user, http.StatusOK)
+	}
 	if h.audit != nil && h.audit.Enabled() {
 		_ = h.audit.EmitAuthEvent(r.Context(), user.Email, "auth:login", "success")
 	}
@@ -88,7 +97,12 @@ func (h *LanIAMHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		if sess, ok := h.svc.Sessions().GetSession(c.Value); ok && sess.User != nil {
 			logoutEmail = sess.User.Email
 		}
-		h.svc.Sessions().DeleteSession(c.Value)
+		if err := h.svc.Sessions().DeleteSession(c.Value); err != nil {
+			log.Printf("lan iam: logout could not revoke the session: %v", err)
+			middleware.ClearLanSessionCookie(w, h.secureCookie)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "logout_failed"})
+			return
+		}
 	}
 	middleware.ClearLanSessionCookie(w, h.secureCookie)
 	if h.audit != nil && h.audit.Enabled() && logoutEmail != "" {
@@ -443,6 +457,24 @@ func (h *LanIAMHandler) establishSession(w http.ResponseWriter, user *models.Lan
 	}
 	middleware.SetLanSessionCookie(w, sess.ID, h.svc.Sessions().CookieMaxAgeSeconds(), h.secureCookie)
 	writeJSON(w, status, map[string]interface{}{"user": publicLanUser(user)})
+}
+
+// establishRememberedSession ouvre une session de 30 jours fixes. Retourne false (après avoir
+// répondu 500) si elle n'a pas pu être enregistrée : on n'annonce pas une session qui ne
+// survivrait pas à un redémarrage.
+func (h *LanIAMHandler) establishRememberedSession(w http.ResponseWriter, r *http.Request, user *models.LanUser) bool {
+	sess, err := h.svc.Sessions().CreateRememberedSession(user, r.UserAgent())
+	if err != nil {
+		log.Printf("lan iam: remembered session could not be created: %v", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return false
+	}
+	middleware.SetLanSessionCookie(w, sess.ID, h.svc.Sessions().RememberCookieMaxAgeSeconds(), h.secureCookie)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"user":                publicLanUser(user),
+		"remember_expires_at": sess.ExpiresAt.UTC().Format(time.RFC3339),
+	})
+	return true
 }
 
 func (h *LanIAMHandler) writeTrustedDeviceError(w http.ResponseWriter, err error) {
