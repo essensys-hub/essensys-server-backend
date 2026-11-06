@@ -105,3 +105,41 @@ func Test_NR_server_backend_24_etat_des_prises_440(t *testing.T) {
 		t.Fatalf("440=1: got %q, want cut", got)
 	}
 }
+
+// NR: NR-server-backend-26 essensys-hub/essensys-server-backend#17
+// lumieres-temporisees-2026-11-003: the six light timer cells are polled
+// (health rotation + snapshot) and a key never read is unknown, never 0.
+func Test_NR_server_backend_26_temporisations_lumieres_lues_et_inconnues(t *testing.T) {
+	keys := []int{521, 555, 556, 557, 561, 562}
+	for _, group := range map[string][]int{"health rotation": HealthIndices, "snapshot": SnapshotIndices} {
+		for _, k := range keys {
+			found := false
+			for _, i := range group {
+				found = found || i == k
+			}
+			if !found {
+				t.Fatalf("key %d missing from the poll group", k)
+			}
+		}
+	}
+	for _, g := range [][]int{DefaultCommandIndices, IdentityIndices, HealthIndices, ComfortEnergyIndices} {
+		if len(g) > 30 {
+			t.Fatalf("group of %d indices exceeds the firmware limit", len(g))
+		}
+	}
+
+	store := data.NewMemoryStore()
+	store.RecordClientPoll("dev1", time.Now())
+	store.SetValue("dev1", 521, "60")
+	store.SetValue("dev1", 556, "0")
+	timers := BuildSnapshot(store, SnapshotOptions{ClientID: "dev1"}).Comfort.LightTimers
+	if timers["dressing"] == nil || *timers["dressing"] != 60 {
+		t.Fatalf("dressing: %v", timers["dressing"])
+	}
+	if timers["wc2"] == nil || *timers["wc2"] != 0 {
+		t.Fatalf("wc2 (read as 0 = never): %v", timers["wc2"])
+	}
+	if v, ok := timers["ann1"]; !ok || v != nil {
+		t.Fatalf("ann1 never read must be present and null, got %v (present=%v)", v, ok)
+	}
+}

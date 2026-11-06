@@ -53,6 +53,20 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		return h
 	}
 
+	// Same as adminOnly, but the 403 carries the JSON body of the light timers contract.
+	adminOnlyJSON := func(h http.Handler) http.Handler {
+		if cfg.LanIAMEnabled && cfg.LanSessionStore != nil {
+			return protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if u, ok := middleware.GetLanUser(r); !ok || u.Role != models.LanRoleAdmin {
+					writeLightTimerError(w, http.StatusForbidden, "forbidden")
+					return
+				}
+				h.ServeHTTP(w, r)
+			}))
+		}
+		return h
+	}
+
 	legacyIoT("/api/serverinfos", cfg.Handler.GetServerInfos)
 	legacyIoT("/api/mystatus", cfg.Handler.PostMyStatus)
 	legacyIoT("/api/myactions", cfg.Handler.GetMyActions)
@@ -64,6 +78,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	apiMux.Handle("/api/admin/heating/sync/status", protect(http.HandlerFunc(cfg.Handler.GetAdminHeatingSyncStatus)))
 	apiMux.Handle("/api/admin/cloudsync/status", protect(http.HandlerFunc(cfg.Handler.GetAdminCloudSyncStatus)))
 	apiMux.Handle("/api/admin/armoire/snapshot", protect(http.HandlerFunc(cfg.Handler.GetAdminArmoireSnapshot)))
+	// lumieres-temporisees-2026-11-003: light auto-off timers, lan_admin only.
+	apiMux.Handle("/api/admin/lights/timers", adminOnlyJSON(http.HandlerFunc(cfg.Handler.GetAdminLightTimers)))
+	apiMux.Handle("/api/admin/lights/timers/", adminOnlyJSON(http.HandlerFunc(cfg.Handler.PutAdminLightTimer)))
 	apiMux.Handle("/api/admin/scenarios/sync", protect(http.HandlerFunc(cfg.Handler.AdminScenariosSync)))
 	apiMux.Handle("/api/scenarios", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))
 	apiMux.Handle("/api/scenarios/", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))

@@ -61,6 +61,9 @@ type ComfortBlock struct {
 	Cumulus   string                 `json:"cumulus,omitempty"`
 	Sprinkler string                 `json:"sprinkler,omitempty"`
 	Scenario  string                 `json:"scenario,omitempty"`
+	// LightTimers maps a light id (dressing, wc1, ...) to its auto-off delay in
+	// minutes; null when the key was never read (lumieres-temporisees-2026-11-003).
+	LightTimers map[string]*int `json:"light_timers"`
 }
 
 type EnergyBlock struct {
@@ -222,6 +225,10 @@ func decodeSecurityOutlets(v string) string {
 
 func decodeComfort(vals map[string]string) ComfortBlock {
 	var b ComfortBlock
+	b.LightTimers = make(map[string]*int, len(core.LightTimers()))
+	for _, t := range core.LightTimers() {
+		b.LightTimers[t.ID] = core.ParseLightTimerValue(vals[fmt.Sprintf("%d", t.Key)])
+	}
 	heating := make(map[string]HeatingZone)
 	for _, z := range heatingZoneKeys {
 		if v, ok := vals[z.index]; ok {
