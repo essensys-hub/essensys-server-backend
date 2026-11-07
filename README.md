@@ -750,6 +750,21 @@ Storage: a single JSON file, written atomically (temporary file then rename), de
 
 Cloud synchronisation (when the cloud agent is enabled): at every cycle the gateway sends its 33 entries to `POST /api/gateway/lights/names/sync` and adopts the merged state returned. Per light, the greatest `(updated_at, version, updated_by)` wins, on both sides; a more recent local name is never overwritten. While offline the local file stays authoritative and nothing is lost: the next successful cycle sends it. The gateway clock should be correct (NTP): the cloud rejects an `updated_at` more than 5 minutes in the future.
 
+### GET /api/shutters/names and PUT /api/admin/shutters/names/{id}
+
+Custom names of the 16 shutters and blinds (feature `noms-volets-2026-11-005`), twin routes of the light names with the same rights, the same name rule, the same errors (`unknown_shutter` instead of `unknown_light`), the same dry run and the same audit (event `shutter_name`). `id` is the shutter identifier shared by the portals and the apps: `volet1salon`, `volet2salon`, `volet3salon`, `volet1salleamanger`, `volet2salleamanger`, `volet1cuisine`, `volet2cuisine`, `voletsdb`, `volet1gdchamb`, `volet2gdchamb`, `volet1ptchamb`, `volet2ptchamb`, `volet3ptchamb`, `voletbureau`, `voletstore`, `store`. Nothing is written to the cabinet.
+
+- `GET /api/shutters/names`: any authenticated LAN user (open when LAN IAM is disabled). `200 {"shutters":[{"id":"volet1salon","default":"Volet 1 Salon","name":"Volet baie vitrée","version":2,"updated_at":"2026-11-07T10:15:30.123Z"}, ...]}` with the 16 shutters in catalogue order.
+- `PUT /api/admin/shutters/names/{id}` with `{"name":"Volet baie vitrée"}` or `{"name":null}`: `lan_admin` only (open when LAN IAM is disabled). Answers `200` with the shutter object plus `"status":"saved"` and pushes the change to the cloud immediately, without blocking the response.
+
+Storage: **the same file and the same `light_names.path` key as the light names, no new setting.** The file gets a second section `shutters` next to `lights`; writing one section keeps the other one and any unknown section untouched (atomic write, a single lock for the whole file). A file written before this feature (only `lights`) is read and completed as is. Without a valid path, `GET` serves the 16 original names and `PUT` answers `503 names_unavailable`.
+
+```json
+{"version":1,"lights":{"dressing":{"name":"WC 3","version":2,"updated_at":"2026-11-07T10:15:30.123Z","updated_by":"admin@example.org"}},"shutters":{"volet1salon":{"name":"Volet baie vitrée","version":1,"updated_at":"2026-11-07T10:15:30.123Z","updated_by":"admin@example.org"}}}
+```
+
+Cloud synchronisation: at every cycle, in a call distinct from the lights one (`POST /api/gateway/shutters/names/sync`, 16 entries), with the same merge rule. A failure of one synchronisation (offline, cloud not yet updated and answering 404) does not block the other. Rolling the gateway back to the previous version would drop the `shutters` section at its next light write; the names are then restored from the cloud at the next synchronisation.
+
 ---
 
 ### GET /health
