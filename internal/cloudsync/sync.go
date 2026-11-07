@@ -48,6 +48,8 @@ type Agent struct {
 	profileMu      sync.Mutex
 	cachedProfiles []cloudSyncProfile
 	status         statusState
+	lightNamesMu   sync.Mutex
+	lightNames     *core.LightNameStore
 }
 
 func NewAgent(cfg Config, actionService *core.ActionService, store data.Store, pull *core.ExchangePullScheduler) *Agent {
@@ -116,6 +118,9 @@ func (a *Agent) pollCycle(ctx context.Context, clientID string) {
 		a.runScheduledSync(ctx, clientID, cfg)
 	}
 	a.pushExchangeProfileAware(ctx, clientID)
+	if err := a.syncLightNames(ctx); err != nil {
+		log.Printf("[cloudsync] light names sync: %v", err)
+	}
 	a.heartbeat(ctx)
 }
 

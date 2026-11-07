@@ -726,6 +726,32 @@ curl -b cookies.txt -X PUT http://localhost/api/admin/lights/timers/wc2 \
 
 ---
 
+### GET /api/lights/names and PUT /api/admin/lights/names/{id}
+
+Custom names of the 33 lights (feature `noms-lumieres-2026-11-004`). `id` is the light identifier shared by the portals and the apps (`terrasse`, `entree`, ..., `dressing`, then the indirect lights `isalonind` ... `idressing`). Names are plain text, 1 to 40 characters after trimming, no control character, no `<` or `>`. An empty name or `null` restores the original name. Nothing is written to the cabinet.
+
+- `GET /api/lights/names`: any authenticated LAN user (open when LAN IAM is disabled). `200 {"lights":[{"id":"dressing","default":"Dressing","name":"WC 3","version":2,"updated_at":"2026-11-07T10:15:30.123Z"}, ...]}` with the 33 lights in catalogue order. `name` is `null`, `version` 0 and `updated_at` `null` while no name was set.
+- `PUT /api/admin/lights/names/{id}` with `{"name":"WC 3"}` or `{"name":null}`: `lan_admin` only (401 without session, 403 `{"error":"forbidden"}` otherwise; open when LAN IAM is disabled). Answers `200` with the light object plus `"status":"saved"`; the version is incremented and `updated_at` (UTC, milliseconds) and the author are recorded. The change is audited (event `light_name`: who, when, previous and new name) and pushed to the cloud immediately, without blocking the response.
+- Dry run: header `X-Essensys-Test-Mode: dry-run` or `?test_mode=dry_run` validates and answers `"status":"dry_run"` without writing.
+- Errors: `400 {"error":"unknown_light"}`, `400 {"error":"invalid_name"}`, `503 {"error":"names_unavailable"}` (no usable storage).
+
+```bash
+curl -b cookies.txt http://localhost/api/lights/names
+curl -b cookies.txt -X PUT http://localhost/api/admin/lights/names/dressing \
+  -H "Content-Type: application/json" -d '{"name": "WC 3"}'
+# {"id":"dressing","default":"Dressing","name":"WC 3","version":1,"updated_at":"2026-11-07T10:15:30.123Z","status":"saved"}
+```
+
+Storage: a single JSON file, written atomically (temporary file then rename), designated by `light_names.path` in `config.yaml` (or the `LIGHT_NAMES_PATH` environment variable). On the CM5 container the path is `/var/lib/essensys/names/light-names.json` (mounted from `/opt/data/light-names`); the directory must be writable by the service. No PostgreSQL needed. Without a valid path, or if the file cannot be read, `GET` serves the original names and `PUT` answers `503 names_unavailable`; an unreadable file is never overwritten.
+
+```json
+{"version":1,"lights":{"dressing":{"name":"WC 3","version":2,"updated_at":"2026-11-07T10:15:30.123Z","updated_by":"admin@example.org"}}}
+```
+
+Cloud synchronisation (when the cloud agent is enabled): at every cycle the gateway sends its 33 entries to `POST /api/gateway/lights/names/sync` and adopts the merged state returned. Per light, the greatest `(updated_at, version, updated_by)` wins, on both sides; a more recent local name is never overwritten. While offline the local file stays authoritative and nothing is lost: the next successful cycle sends it. The gateway clock should be correct (NTP): the cloud rejects an `updated_at` more than 5 minutes in the future.
+
+---
+
 ### GET /health
 
 Health check endpoint for monitoring and load balancers. Does not require authentication.

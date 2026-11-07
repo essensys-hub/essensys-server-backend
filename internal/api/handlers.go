@@ -67,6 +67,8 @@ type Handler struct {
 	armoireRotator *armoire.Rotator
 	armoireCfg     config.ArmoireConfig
 	audit          *audit.Service
+	lightNames       *core.LightNameStore
+	lightNamesNotify func()
 }
 
 // NewHandler creates a new Handler instance.

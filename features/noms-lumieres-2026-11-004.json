@@ -1,0 +1,89 @@
+{
+  "$schema": "./schema/feature.schema.json",
+  "id": "noms-lumieres-2026-11-004",
+  "title": "Renommer les lumières depuis les apps et les portails (gateway)",
+  "status": "proposed",
+  "owner": "nrineau",
+  "github": {
+    "issue": "essensys-hub/essensys-feature-lifecycle#41",
+    "project_item": "PVTI_lADODqt0Wc4BavHTzhGkOlI"
+  },
+  "git": {
+    "branch": "feat/noms-lumieres-2026-11-004",
+    "pr_url": null
+  },
+  "openspec": {
+    "change_id": "noms-lumieres-2026-11-004",
+    "path": "openspec/changes/noms-lumieres-2026-11-004",
+    "proposal": "openspec/changes/noms-lumieres-2026-11-004/proposal.md",
+    "design": null,
+    "tasks": "openspec/changes/noms-lumieres-2026-11-004/tasks.md",
+    "specs": [
+      "openspec/changes/noms-lumieres-2026-11-004/specs/light-names-gateway/spec.md"
+    ]
+  },
+  "implementation": {
+    "paths": [
+      "internal/core/light_names.go",
+      "internal/api/handlers_light_names.go",
+      "internal/api/router.go",
+      "internal/cloudsync/light_names_sync.go",
+      "internal/cloudsync/sync.go",
+      "internal/config/config.go",
+      "cmd/server/main.go"
+    ],
+    "primary_surface": "api"
+  },
+  "userguide": {
+    "pages": [
+      "README.md",
+      "config.yaml.example"
+    ],
+    "language": "fr",
+    "i18n_keys": [],
+    "screenshots": []
+  },
+  "tests": {
+    "playwright": [],
+    "junit": [
+      "internal/core/light_names_test.go",
+      "internal/api/handlers_light_names_test.go",
+      "internal/cloudsync/light_names_sync_test.go",
+      "internal/config/config_test.go"
+    ],
+    "coverage_must_test": [
+      "nom de lumiere reserve a lan_admin",
+      "synchronisation des noms avec le cloud dans les deux sens"
+    ],
+    "smoke_tags": [
+      "@nr"
+    ]
+  },
+  "release": {
+    "changelog_entry": "Gateway : noms personnalisés des 33 lumières (GET /api/lights/names, PUT /api/admin/lights/names/{id} réservé à lan_admin) stockés dans un fichier et synchronisés avec le cloud (#19).",
+    "target_tag": null,
+    "surfaces": [
+      "essensys-server-backend"
+    ],
+    "paths": []
+  },
+  "security": {
+    "sca_tool": "dependabot",
+    "dependabot_alerts_url": null,
+    "last_scan_at": null,
+    "cve_findings": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    },
+    "secret_scan": {
+      "status": "clean",
+      "tool": "gitleaks",
+      "last_scan_at": null
+    },
+    "muted_findings": [],
+    "threat_model_url": "../essensys-memory/openspec/changes/portal-action-merge-2026-10-007/design.md",
+    "owner_security": "nrineau"
+  }
+}

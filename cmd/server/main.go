@@ -146,6 +146,16 @@ func main() {
 	// Initialize handler
 	handler := api.NewHandler(actionService, statusService, store, pullScheduler, cloudAgent, cfg.Armoire)
 
+	// Noms personnalisés des lumières (noms-lumieres-2026-11-004) : réplique locale en fichier.
+	lightNames := core.NewLightNameStore(cfg.LightNames.Path)
+	if lightNames.Available() {
+		log.Printf("Light names file: %s", cfg.LightNames.Path)
+	} else {
+		log.Printf("Light names: light_names.path not set, writes disabled (original names served)")
+	}
+	cloudAgent.SetLightNames(lightNames)
+	handler.SetLightNames(lightNames, cloudAgent.TriggerLightNamesSync)
+
 	// Cloud hub sync (optional — outbound HTTPS to mon.essensys.fr)
 	cloudCtx, cloudCancel := context.WithCancel(context.Background())
 	cloudAgent.Start(cloudCtx)

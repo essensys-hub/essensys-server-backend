@@ -81,6 +81,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	// lumieres-temporisees-2026-11-003: light auto-off timers, lan_admin only.
 	apiMux.Handle("/api/admin/lights/timers", adminOnlyJSON(http.HandlerFunc(cfg.Handler.GetAdminLightTimers)))
 	apiMux.Handle("/api/admin/lights/timers/", adminOnlyJSON(http.HandlerFunc(cfg.Handler.PutAdminLightTimer)))
+	// noms-lumieres-2026-11-004 : lecture pour tout utilisateur authentifié, écriture lan_admin.
+	apiMux.Handle("/api/lights/names", protect(http.HandlerFunc(cfg.Handler.GetLightNames)))
+	apiMux.Handle("/api/admin/lights/names/", adminOnlyJSON(http.HandlerFunc(cfg.Handler.PutAdminLightName)))
 	apiMux.Handle("/api/admin/scenarios/sync", protect(http.HandlerFunc(cfg.Handler.AdminScenariosSync)))
 	apiMux.Handle("/api/scenarios", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))
 	apiMux.Handle("/api/scenarios/", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))
