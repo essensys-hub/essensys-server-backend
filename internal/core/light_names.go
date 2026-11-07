@@ -115,12 +115,44 @@ type lightNameEntry struct {
 	UpdatedBy string  `json:"updated_by"`
 }
 
-type lightNamesFile struct {
-	Version int                       `json:"version"`
-	Lights  map[string]lightNameEntry `json:"lights"`
+// namesDoc est le contenu brut du fichier : chaque section reste en JSON brut tant qu'elle
+// n'est pas modifiée, de sorte qu'une écriture ne perde ni l'autre section (« lights » ou
+// « shutters ») ni une section inconnue ajoutée à la main (noms-volets-2026-11-005).
+type namesDoc map[string]json.RawMessage
+
+const (
+	namesSectionLights   = "lights"
+	namesSectionShutters = "shutters"
+)
+
+// section décode une section ; une section absente est vide.
+func (d namesDoc) section(name string) (map[string]lightNameEntry, error) {
+	out := map[string]lightNameEntry{}
+	raw, ok := d[name]
+	if !ok || string(raw) == "null" {
+		return out, nil
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, ErrLightNamesUnavailable
+	}
+	if out == nil {
+		out = map[string]lightNameEntry{}
+	}
+	return out, nil
 }
 
-// LightNameStore est le magasin de fichier JSON unique, écrit de façon atomique.
+// setSection remplace une section et laisse toutes les autres telles quelles.
+func (d namesDoc) setSection(name string, entries map[string]lightNameEntry) error {
+	raw, err := json.Marshal(entries)
+	if err != nil {
+		return ErrLightNamesUnavailable
+	}
+	d[name] = raw
+	return nil
+}
+
+// LightNameStore est le magasin de fichier JSON unique (sections « lights » et « shutters »),
+// écrit de façon atomique sous un seul verrou.
 type LightNameStore struct {
 	path string
 	mu   sync.Mutex
@@ -135,31 +167,49 @@ func NewLightNameStore(path string) *LightNameStore {
 // Available indique si un chemin est configuré (l'inscriptibilité se vérifie à l'écriture).
 func (s *LightNameStore) Available() bool { return s != nil && s.path != "" }
 
-// load lit le fichier. Fichier absent : état vide. Fichier illisible : erreur.
-func (s *LightNameStore) load() (map[string]lightNameEntry, error) {
+// loadDoc lit le fichier. Fichier absent : document vide. Fichier illisible : erreur.
+func (s *LightNameStore) loadDoc() (namesDoc, error) {
 	if !s.Available() {
 		return nil, ErrLightNamesUnavailable
 	}
 	raw, err := os.ReadFile(s.path)
 	if errors.Is(err, os.ErrNotExist) {
-		return map[string]lightNameEntry{}, nil
+		return namesDoc{}, nil
 	}
 	if err != nil {
 		return nil, ErrLightNamesUnavailable
 	}
-	var f lightNamesFile
-	if err := json.Unmarshal(raw, &f); err != nil || f.Version != lightNamesFileVersion {
+	var d namesDoc
+	if err := json.Unmarshal(raw, &d); err != nil || d == nil {
 		return nil, ErrLightNamesUnavailable
 	}
-	if f.Lights == nil {
-		f.Lights = map[string]lightNameEntry{}
+	var version int
+	if v, ok := d["version"]; !ok || json.Unmarshal(v, &version) != nil || version != lightNamesFileVersion {
+		return nil, ErrLightNamesUnavailable
 	}
-	return f.Lights, nil
+	return d, nil
 }
 
-// save écrit le fichier de façon atomique : fichier temporaire dans le même dossier, puis renommage.
-func (s *LightNameStore) save(lights map[string]lightNameEntry) error {
-	raw, err := json.Marshal(lightNamesFile{Version: lightNamesFileVersion, Lights: lights})
+// load lit une section du fichier.
+func (s *LightNameStore) load(section string) (namesDoc, map[string]lightNameEntry, error) {
+	d, err := s.loadDoc()
+	if err != nil {
+		return nil, nil, err
+	}
+	entries, err := d.section(section)
+	if err != nil {
+		return nil, nil, err
+	}
+	return d, entries, nil
+}
+
+// save écrit le document de façon atomique : fichier temporaire dans le même dossier, puis renommage.
+func (s *LightNameStore) save(d namesDoc, section string, entries map[string]lightNameEntry) error {
+	if err := d.setSection(section, entries); err != nil {
+		return err
+	}
+	d["version"] = json.RawMessage("1")
+	raw, err := json.Marshal(d)
 	if err != nil {
 		return ErrLightNamesUnavailable
 	}
@@ -202,7 +252,7 @@ func (s *LightNameStore) List() []LightNameView {
 	var lights map[string]lightNameEntry
 	if s != nil {
 		s.mu.Lock()
-		lights, _ = s.load()
+		_, lights, _ = s.load(namesSectionLights)
 		s.mu.Unlock()
 	}
 	out := make([]LightNameView, 0, len(lightNameCatalogue))
@@ -235,7 +285,7 @@ func (s *LightNameStore) Set(id string, name *string, by string, now time.Time) 
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	lights, err := s.load()
+	doc, lights, err := s.load(namesSectionLights)
 	if err != nil {
 		return LightNameView{}, err
 	}
@@ -245,7 +295,7 @@ func (s *LightNameStore) Set(id string, name *string, by string, now time.Time) 
 	e.UpdatedAt = now.UTC().Format(lightNameTimeLayout)
 	e.UpdatedBy = by
 	lights[id] = e
-	if err := s.save(lights); err != nil {
+	if err := s.save(doc, namesSectionLights, lights); err != nil {
 		return LightNameView{}, err
 	}
 	return lightNameView(info, e, true), nil
@@ -271,7 +321,7 @@ func (s *LightNameStore) Merge(remote []LightNameView) (bool, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	lights, err := s.load()
+	doc, lights, err := s.load(namesSectionLights)
 	if err != nil {
 		return false, err
 	}
@@ -302,7 +352,7 @@ func (s *LightNameStore) Merge(remote []LightNameView) (bool, error) {
 	if !changed {
 		return false, nil
 	}
-	return true, s.save(lights)
+	return true, s.save(doc, namesSectionLights, lights)
 }
 
 // lightNameNewer : a est strictement plus récent que b selon (updated_at, version, updated_by).

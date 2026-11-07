@@ -78,5 +78,7 @@ plugins:
 # Fichier JSON unique, écrit de façon atomique ; son dossier doit être inscriptible par le service.
 # Sans chemin valide, les noms d'origine sont servis et PUT /api/admin/lights/names/{id} répond 503 names_unavailable.
 # Conteneur CM5 : /var/lib/essensys/names/light-names.json (monté depuis /opt/data/light-names)
+# Le même fichier porte aussi les noms des volets et stores (section "shutters", noms-volets-2026-11-005) :
+# aucune clé supplémentaire, GET /api/shutters/names et PUT /api/admin/shutters/names/{id}.
 light_names:
   path: /var/lib/essensys/names/light-names.json

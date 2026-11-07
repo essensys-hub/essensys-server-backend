@@ -69,6 +69,9 @@ type Handler struct {
 	audit          *audit.Service
 	lightNames       *core.LightNameStore
 	lightNamesNotify func()
+	// noms-volets-2026-11-005 : même magasin (même fichier) que les lumières.
+	shutterNames       *core.LightNameStore
+	shutterNamesNotify func()
 }
 
 // NewHandler creates a new Handler instance.

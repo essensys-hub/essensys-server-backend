@@ -22,6 +22,8 @@ type namesRig struct {
 	path    string
 	store   data.Store
 	synced  int
+	// noms-volets-2026-11-005 : même magasin (même fichier), notification distincte.
+	shutterSynced int
 }
 
 func newNamesRig(t *testing.T, iamEnabled bool, withStorage bool) *namesRig {
@@ -32,7 +34,9 @@ func newNamesRig(t *testing.T, iamEnabled bool, withStorage bool) *namesRig {
 	if withStorage {
 		rig.path = filepath.Join(t.TempDir(), "light-names.json")
 	}
-	h.SetLightNames(core.NewLightNameStore(rig.path), func() { rig.synced++ })
+	names := core.NewLightNameStore(rig.path)
+	h.SetLightNames(names, func() { rig.synced++ })
+	h.SetShutterNames(names, func() { rig.shutterSynced++ })
 	sessions := laniam.NewSessionStore(1)
 	for i, role := range []string{models.LanRoleAdmin, models.LanRoleUser} {
 		sess, err := sessions.CreateSession(&models.LanUser{ID: i + 1, Email: role + "@example.org", Role: role})
