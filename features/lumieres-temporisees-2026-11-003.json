@@ -1,0 +1,87 @@
+{
+  "$schema": "./schema/feature.schema.json",
+  "id": "lumieres-temporisees-2026-11-003",
+  "title": "Régler les temporisations de six lumières depuis les apps et les portails (gateway)",
+  "status": "proposed",
+  "owner": "nrineau",
+  "github": {
+    "issue": "essensys-hub/essensys-feature-lifecycle#45",
+    "project_item": "PVTI_lADODqt0Wc4BavHTzhGsSFY"
+  },
+  "git": {
+    "branch": "feat/lumieres-temporisees-2026-11-003",
+    "pr_url": null
+  },
+  "openspec": {
+    "change_id": "lumieres-temporisees-2026-11-003",
+    "path": "openspec/changes/lumieres-temporisees-2026-11-003",
+    "proposal": "openspec/changes/lumieres-temporisees-2026-11-003/proposal.md",
+    "design": null,
+    "tasks": "openspec/changes/lumieres-temporisees-2026-11-003/tasks.md",
+    "specs": [
+      "openspec/changes/lumieres-temporisees-2026-11-003/specs/light-timers-gateway/spec.md"
+    ]
+  },
+  "implementation": {
+    "paths": [
+      "pkg/protocol/constants.go",
+      "internal/core/light_timers.go",
+      "internal/api/handlers_light_timers.go",
+      "internal/api/router.go",
+      "internal/armoire/pull_groups.go",
+      "internal/armoire/snapshot.go"
+    ],
+    "primary_surface": "api"
+  },
+  "userguide": {
+    "pages": [
+      "README.md"
+    ],
+    "language": "fr",
+    "i18n_keys": [],
+    "screenshots": []
+  },
+  "tests": {
+    "playwright": [],
+    "junit": [
+      "internal/core/light_timers_test.go",
+      "internal/api/handlers_light_timers_test.go",
+      "internal/armoire/decode_test.go",
+      "internal/cloudsync/push_filter_test.go"
+    ],
+    "coverage_must_test": [
+      "temporisation lumiere reservee a lan_admin",
+      "temporisations lumieres lues et inconnues"
+    ],
+    "smoke_tags": [
+      "@nr"
+    ]
+  },
+  "release": {
+    "changelog_entry": "Gateway : réglage des temporisations de six lumières (521, 555-557, 561, 562) via GET/PUT /api/admin/lights/timers, réservé à lan_admin (#17).",
+    "target_tag": null,
+    "surfaces": [
+      "essensys-server-backend"
+    ],
+    "paths": []
+  },
+  "security": {
+    "sca_tool": "dependabot",
+    "dependabot_alerts_url": null,
+    "last_scan_at": null,
+    "cve_findings": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    },
+    "secret_scan": {
+      "status": "clean",
+      "tool": "gitleaks",
+      "last_scan_at": null
+    },
+    "muted_findings": [],
+    "threat_model_url": "../essensys-memory/openspec/changes/portal-action-merge-2026-10-007/design.md",
+    "owner_security": "nrineau"
+  }
+}

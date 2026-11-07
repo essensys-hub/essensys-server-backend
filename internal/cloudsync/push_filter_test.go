@@ -80,3 +80,23 @@ func TestPushIndicesFromProfilesList_prisesDeSecurite(t *testing.T) {
 		t.Fatal("440 must be pushed to the cloud")
 	}
 }
+
+// lumieres-temporisees-2026-11-003 (#17): the cloud "Temporisations lumières"
+// profile ([[521,521],[555,557],[561,562]]) makes the gateway push the six timers.
+func TestPushIndicesFromProfilesList_temporisationsLumieres(t *testing.T) {
+	profiles := []cloudSyncProfile{
+		{Name: "Temporisations lumières", Enabled: true, PushToCloud: true, PullFromArmoire: true, IndexRanges: [][2]int{{521, 521}, {555, 557}, {561, 562}}},
+	}
+	got := map[int]bool{}
+	for _, k := range pushIndicesFromProfilesList(profiles) {
+		got[k] = true
+	}
+	for _, k := range []int{521, 555, 556, 557, 561, 562} {
+		if !got[k] {
+			t.Fatalf("%d must be pushed to the cloud", k)
+		}
+	}
+	if len(got) != 6 {
+		t.Fatalf("only the six timers expected, got %v", got)
+	}
+}

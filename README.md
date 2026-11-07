@@ -697,6 +697,35 @@ curl -X POST http://localhost/api/admin/inject \
 
 ---
 
+### GET /api/admin/lights/timers and PUT /api/admin/lights/timers/{id}
+
+Auto-off delay of six lights (feature `lumieres-temporisees-2026-11-003`). Value in minutes, integer 0 to 255, `0` = never. Reserved to the `lan_admin` role when LAN IAM is enabled (401 without session, 403 `{"error":"forbidden"}` otherwise); open like the other admin routes when LAN IAM is disabled.
+
+| `id` | Label | Exchange key |
+|---|---|---|
+| `dressing` | Dressing | 521 |
+| `wc1` | WC 1 | 555 |
+| `wc2` | WC 2 | 556 |
+| `pieceserv` | Service | 557 |
+| `ann1` | Annexe 1 | 561 |
+| `ann2` | Annexe 2 | 562 |
+
+```bash
+curl -b cookies.txt http://localhost/api/admin/lights/timers
+# {"timers":[{"id":"dressing","label":"Dressing","key":521,"minutes":15},{"id":"wc1","label":"WC 1","key":555,"minutes":null}, ...]}
+
+curl -b cookies.txt -X PUT http://localhost/api/admin/lights/timers/wc2 \
+  -H "Content-Type: application/json" -d '{"minutes": 30}'
+# {"id":"wc2","minutes":30,"status":"queued"}
+```
+
+- `GET` returns the six lights in the order above. `minutes` is `null` when the key was never read by the gateway (never 0 by default).
+- `PUT` queues one action (`556 = "30"`, no scenario block completion: the keys are outside 605-623) and audits it with the previous value. With `?test_mode=dry_run` (or the `X-Essensys-Test-Mode: dry-run` header) it validates, queues nothing and answers `"status":"dry_run"`.
+- Errors: `400 {"error":"invalid_minutes"}` (not an integer, below 0 or above 255), `400 {"error":"unknown_light"}`.
+- The six keys are part of the `serverinfos` health rotation, of `GET /api/admin/armoire/snapshot` (`comfort.light_timers`, `null` when unknown) and of the keys pushed to the cloud by a sync profile covering them.
+
+---
+
 ### GET /health
 
 Health check endpoint for monitoring and load balancers. Does not require authentication.

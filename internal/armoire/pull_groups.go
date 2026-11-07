@@ -24,7 +24,11 @@ var HealthIndices = []int{
 	408, 413, 414, 415,
 	440,
 	920,
+	521, 555, 556, 557, 561, 562,
 }
+
+// LightTimerIndices: light auto-off timers (lumieres-temporisees-2026-11-003).
+var LightTimerIndices = []int{521, 555, 556, 557, 561, 562}
 
 // ComfortEnergyIndices: heating, cumulus, sprinkler, scenario, Linky, wind.
 var ComfortEnergyIndices = []int{
@@ -40,6 +44,7 @@ var SnapshotIndices = []int{
 	10, 11, 12,
 	349, 350, 351, 352, 353,
 	363, 408, 413, 414, 415, 440, 459, 591,
+	521, 555, 556, 557, 561, 562,
 	460, 461, 463, 464,
 	920, 940, 945,
 	947, 948, 949, 950, 951, 952,
