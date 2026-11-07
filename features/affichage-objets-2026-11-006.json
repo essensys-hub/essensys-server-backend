@@ -1,0 +1,90 @@
+{
+  "$schema": "./schema/feature.schema.json",
+  "id": "affichage-objets-2026-11-006",
+  "title": "Activer, désactiver et ordonner les lumières et les volets depuis les apps et les portails (gateway)",
+  "status": "proposed",
+  "owner": "nrineau",
+  "github": {
+    "issue": "essensys-hub/essensys-feature-lifecycle#55",
+    "project_item": "PVTI_lADODqt0Wc4BavHTzhG0e10"
+  },
+  "git": {
+    "branch": "feat/affichage-objets-2026-11-006",
+    "pr_url": null
+  },
+  "openspec": {
+    "change_id": "affichage-objets-2026-11-006",
+    "path": "openspec/changes/affichage-objets-2026-11-006",
+    "proposal": "openspec/changes/affichage-objets-2026-11-006/proposal.md",
+    "design": null,
+    "tasks": "openspec/changes/affichage-objets-2026-11-006/tasks.md",
+    "specs": [
+      "openspec/changes/affichage-objets-2026-11-006/specs/object-layout-gateway/spec.md"
+    ]
+  },
+  "implementation": {
+    "paths": [
+      "internal/core/light_names.go",
+      "internal/core/object_layout.go",
+      "internal/api/handlers_object_layout.go",
+      "internal/api/handlers.go",
+      "internal/api/router.go",
+      "internal/cloudsync/object_layout_sync.go",
+      "internal/cloudsync/sync.go",
+      "cmd/server/main.go"
+    ],
+    "primary_surface": "api"
+  },
+  "userguide": {
+    "pages": [
+      "README.md",
+      "config.yaml.example"
+    ],
+    "language": "fr",
+    "i18n_keys": [],
+    "screenshots": []
+  },
+  "tests": {
+    "playwright": [],
+    "junit": [
+      "internal/core/object_layout_test.go",
+      "internal/api/handlers_object_layout_test.go",
+      "internal/cloudsync/object_layout_sync_test.go"
+    ],
+    "coverage_must_test": [
+      "disposition reservee a lan_admin",
+      "synchronisation des dispositions avec le cloud",
+      "ecritures croisees preservent toutes les sections"
+    ],
+    "smoke_tags": [
+      "@nr"
+    ]
+  },
+  "release": {
+    "changelog_entry": "Gateway : disposition des lumières et des volets (GET /api/{lights|shutters}/layout, PUT /api/admin/{lights|shutters}/layout réservé à lan_admin) dans le même fichier que les noms (sections lights_layout et shutters_layout) et synchronisée avec le cloud (#23).",
+    "target_tag": null,
+    "surfaces": [
+      "essensys-server-backend"
+    ],
+    "paths": []
+  },
+  "security": {
+    "sca_tool": "dependabot",
+    "dependabot_alerts_url": null,
+    "last_scan_at": null,
+    "cve_findings": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    },
+    "secret_scan": {
+      "status": "clean",
+      "tool": "gitleaks",
+      "last_scan_at": null
+    },
+    "muted_findings": [],
+    "threat_model_url": "../essensys-memory/openspec/changes/portal-action-merge-2026-10-007/design.md",
+    "owner_security": "nrineau"
+  }
+}

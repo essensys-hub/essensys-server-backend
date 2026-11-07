@@ -80,5 +80,8 @@ plugins:
 # Conteneur CM5 : /var/lib/essensys/names/light-names.json (monté depuis /opt/data/light-names)
 # Le même fichier porte aussi les noms des volets et stores (section "shutters", noms-volets-2026-11-005) :
 # aucune clé supplémentaire, GET /api/shutters/names et PUT /api/admin/shutters/names/{id}.
+# Il porte enfin la disposition des objets (activation et ordre, affichage-objets-2026-11-006) dans
+# les sections "lights_layout" et "shutters_layout" : toujours aucune clé supplémentaire,
+# GET /api/{lights|shutters}/layout et PUT /api/admin/{lights|shutters}/layout.
 light_names:
   path: /var/lib/essensys/names/light-names.json
