@@ -73,3 +73,10 @@ plugins:
   # API HTTP Prometheus, utilisée pour l'historique long terme (week/month/year)
   # des métriques de plugins. L'historique du jour reste servi par Redis (48 h).
   prometheus_url: "http://127.0.0.1:9090"
+
+# Noms personnalisés des lumières (noms-lumieres-2026-11-004)
+# Fichier JSON unique, écrit de façon atomique ; son dossier doit être inscriptible par le service.
+# Sans chemin valide, les noms d'origine sont servis et PUT /api/admin/lights/names/{id} répond 503 names_unavailable.
+# Conteneur CM5 : /var/lib/essensys/names/light-names.json (monté depuis /opt/data/light-names)
+light_names:
+  path: /var/lib/essensys/names/light-names.json

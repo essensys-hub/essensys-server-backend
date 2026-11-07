@@ -25,6 +25,13 @@ type Config struct {
     Armoire ArmoireConfig `yaml:"armoire"`
     Audit   AuditConfig   `yaml:"audit"`
     Plugins PluginsConfig `yaml:"plugins"`
+    LightNames LightNamesConfig `yaml:"light_names"`
+}
+
+// LightNamesConfig désigne le fichier JSON des noms personnalisés des lumières
+// (noms-lumieres-2026-11-004). Chemin vide : lecture des noms d'origine, écriture refusée (503).
+type LightNamesConfig struct {
+    Path string `yaml:"path"`
 }
 
 // PluginsConfig configure le framework de plugins (historique long terme, etc.).
@@ -283,6 +290,9 @@ func loadFromEnv(cfg *Config) {
 	}
 	if v := os.Getenv("ARMOIRE_CLIENT_ID"); v != "" {
 		cfg.Armoire.ClientID = v
+	}
+	if v := os.Getenv("LIGHT_NAMES_PATH"); v != "" {
+		cfg.LightNames.Path = v
 	}
 }
 

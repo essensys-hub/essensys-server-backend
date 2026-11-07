@@ -261,3 +261,23 @@ logging:
 		t.Errorf("Expected 2 clients from YAML, got %d", len(cfg.Auth.Clients))
 	}
 }
+
+func TestLoadFromFile_LightNamesPath(t *testing.T) {
+	os.Clearenv()
+	p := t.TempDir() + "/config.yaml"
+	if err := os.WriteFile(p, []byte("light_names:\n  path: /var/lib/essensys/names/light-names.json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadFromFile(p)
+	if err != nil {
+		t.Fatalf("LoadFromFile: %v", err)
+	}
+	if cfg.LightNames.Path != "/var/lib/essensys/names/light-names.json" {
+		t.Fatalf("light_names.path = %q", cfg.LightNames.Path)
+	}
+	t.Setenv("LIGHT_NAMES_PATH", "/tmp/override.json")
+	cfg, _ = LoadFromFile(p)
+	if cfg.LightNames.Path != "/tmp/override.json" {
+		t.Fatalf("la variable d'environnement doit primer : %q", cfg.LightNames.Path)
+	}
+}
