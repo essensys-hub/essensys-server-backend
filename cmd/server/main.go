@@ -158,6 +158,10 @@ func main() {
 	// Noms des volets (noms-volets-2026-11-005) : même magasin, même fichier, même clé light_names.path.
 	cloudAgent.SetShutterNames(lightNames)
 	handler.SetShutterNames(lightNames, cloudAgent.TriggerShutterNamesSync)
+	// Disposition des objets (affichage-objets-2026-11-006) : même magasin, même fichier, sections
+	// lights_layout et shutters_layout ; aucune nouvelle clé de configuration.
+	cloudAgent.SetObjectLayout(lightNames)
+	handler.SetObjectLayout(lightNames, cloudAgent.TriggerLightsLayoutSync, cloudAgent.TriggerShuttersLayoutSync)
 
 	// Cloud hub sync (optional — outbound HTTPS to mon.essensys.fr)
 	cloudCtx, cloudCancel := context.WithCancel(context.Background())

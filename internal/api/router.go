@@ -87,6 +87,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	// noms-volets-2026-11-005 : routes jumelles pour les volets et stores.
 	apiMux.Handle("/api/shutters/names", protect(http.HandlerFunc(cfg.Handler.GetShutterNames)))
 	apiMux.Handle("/api/admin/shutters/names/", adminOnlyJSON(http.HandlerFunc(cfg.Handler.PutAdminShutterName)))
+	// affichage-objets-2026-11-006 : disposition (activation et ordre), un document par genre.
+	apiMux.Handle("/api/lights/layout", protect(http.HandlerFunc(cfg.Handler.GetLightsLayout)))
+	apiMux.Handle("/api/shutters/layout", protect(http.HandlerFunc(cfg.Handler.GetShuttersLayout)))
+	apiMux.Handle("/api/admin/lights/layout", adminOnlyJSON(http.HandlerFunc(cfg.Handler.PutAdminLightsLayout)))
+	apiMux.Handle("/api/admin/shutters/layout", adminOnlyJSON(http.HandlerFunc(cfg.Handler.PutAdminShuttersLayout)))
 	apiMux.Handle("/api/admin/scenarios/sync", protect(http.HandlerFunc(cfg.Handler.AdminScenariosSync)))
 	apiMux.Handle("/api/scenarios", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))
 	apiMux.Handle("/api/scenarios/", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))

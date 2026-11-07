@@ -208,6 +208,11 @@ func (s *LightNameStore) save(d namesDoc, section string, entries map[string]lig
 	if err := d.setSection(section, entries); err != nil {
 		return err
 	}
+	return s.writeDoc(d)
+}
+
+// writeDoc écrit le document entier (toutes les sections) de façon atomique. Appelé sous le verrou.
+func (s *LightNameStore) writeDoc(d namesDoc) error {
 	d["version"] = json.RawMessage("1")
 	raw, err := json.Marshal(d)
 	if err != nil {

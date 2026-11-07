@@ -765,6 +765,21 @@ Storage: **the same file and the same `light_names.path` key as the light names,
 
 Cloud synchronisation: at every cycle, in a call distinct from the lights one (`POST /api/gateway/shutters/names/sync`, 16 entries), with the same merge rule. A failure of one synchronisation (offline, cloud not yet updated and answering 404) does not block the other. Rolling the gateway back to the previous version would drop the `shutters` section at its next light write; the names are then restored from the cloud at the next synchronisation.
 
+### GET /api/lights/layout, GET /api/shutters/layout, PUT /api/admin/lights/layout and PUT /api/admin/shutters/layout
+
+Activation and display order of the 33 lights and the 16 shutters and blinds (feature `affichage-objets-2026-11-006`). One document per kind, twin routes: `{"order":["salon","entree"],"disabled":["wc2"],"version":3,"updated_at":"2026-11-07T10:15:30.123Z"}`. `order` and `disabled` hold identifiers of the kind's catalogue (the same identifiers as the names), without duplicates; an incomplete `order` is accepted as is (the clients append the missing identifiers in catalogue order and ignore unknown ones). Default (nothing saved): `{"order":[],"disabled":[],"version":0,"updated_at":null}`. `updated_by` is never returned to clients. Nothing is written to the cabinet.
+
+- `GET`: any authenticated LAN user (open when LAN IAM is disabled).
+- `PUT` with `{"order":[…],"disabled":[…]}` (both keys required) or `{"reset":true}` (back to the default, still at version `n+1`): `lan_admin` only (open when LAN IAM is disabled). The whole document is replaced at version `n+1`. Answers `200` with the document plus `"status":"saved"` and pushes it to the cloud immediately, without blocking the response. Errors: `400 unknown_light` / `unknown_shutter` (identifier outside the kind's catalogue, including one of the other kind), `400 invalid_layout` (unreadable JSON, missing key, not a list of strings, duplicate, body over 16 KB), `503 names_unavailable` (no valid storage). Dry run (`X-Essensys-Test-Mode: dry-run` or `?test_mode=dry_run`) validates and answers `"status":"dry_run"` without writing. Every change is audited (event `object_layout`, field `kind`).
+
+Storage: **the same file and the same `light_names.path` key as the names, no new setting.** Two more sections, `lights_layout` and `shutters_layout`, are objects (not name tables); writing any section keeps all the others and any unknown section untouched. A file written by the previous feature is read and completed as is. Without a valid path, `GET` serves the default and `PUT` answers `503 names_unavailable`.
+
+```json
+{"version":1,"lights":{},"shutters":{},"lights_layout":{"order":["salon"],"disabled":["wc2"],"version":3,"updated_at":"2026-11-07T10:15:30.123Z","updated_by":"admin@example.org"},"shutters_layout":{"order":[],"disabled":["voletbureau"],"version":1,"updated_at":"2026-11-07T10:15:30.123Z","updated_by":"admin@example.org"}}
+```
+
+Cloud synchronisation: at every cycle, one call per kind (`POST /api/gateway/lights/layout/sync` and `POST /api/gateway/shutters/layout/sync`), distinct from the names calls, exchanging the whole document; the greatest `(updated_at, version, updated_by)` wins on both sides, so a more recent local document is never overwritten. A failure of one call (offline, cloud not yet updated and answering 404) does not block the others. Rolling the gateway back to the light-names version (before sections were preserved) would drop the layout sections at its next light name write; they are then restored from the cloud at the next synchronisation.
+
 ---
 
 ### GET /health

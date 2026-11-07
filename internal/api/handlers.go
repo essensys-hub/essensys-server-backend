@@ -72,6 +72,9 @@ type Handler struct {
 	// noms-volets-2026-11-005 : même magasin (même fichier) que les lumières.
 	shutterNames       *core.LightNameStore
 	shutterNamesNotify func()
+	// affichage-objets-2026-11-006 : dispositions, même magasin ; une notification par genre.
+	objectLayout       *core.LightNameStore
+	objectLayoutNotify map[core.LayoutKind]func()
 }
 
 // NewHandler creates a new Handler instance.
