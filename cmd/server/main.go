@@ -155,6 +155,9 @@ func main() {
 	}
 	cloudAgent.SetLightNames(lightNames)
 	handler.SetLightNames(lightNames, cloudAgent.TriggerLightNamesSync)
+	// Noms des volets (noms-volets-2026-11-005) : même magasin, même fichier, même clé light_names.path.
+	cloudAgent.SetShutterNames(lightNames)
+	handler.SetShutterNames(lightNames, cloudAgent.TriggerShutterNamesSync)
 
 	// Cloud hub sync (optional — outbound HTTPS to mon.essensys.fr)
 	cloudCtx, cloudCancel := context.WithCancel(context.Background())

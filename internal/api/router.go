@@ -84,6 +84,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	// noms-lumieres-2026-11-004 : lecture pour tout utilisateur authentifié, écriture lan_admin.
 	apiMux.Handle("/api/lights/names", protect(http.HandlerFunc(cfg.Handler.GetLightNames)))
 	apiMux.Handle("/api/admin/lights/names/", adminOnlyJSON(http.HandlerFunc(cfg.Handler.PutAdminLightName)))
+	// noms-volets-2026-11-005 : routes jumelles pour les volets et stores.
+	apiMux.Handle("/api/shutters/names", protect(http.HandlerFunc(cfg.Handler.GetShutterNames)))
+	apiMux.Handle("/api/admin/shutters/names/", adminOnlyJSON(http.HandlerFunc(cfg.Handler.PutAdminShutterName)))
 	apiMux.Handle("/api/admin/scenarios/sync", protect(http.HandlerFunc(cfg.Handler.AdminScenariosSync)))
 	apiMux.Handle("/api/scenarios", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))
 	apiMux.Handle("/api/scenarios/", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))
