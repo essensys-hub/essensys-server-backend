@@ -24,6 +24,8 @@ type namesRig struct {
 	synced  int
 	// noms-volets-2026-11-005 : même magasin (même fichier), notification distincte.
 	shutterSynced int
+	// affichage-objets-2026-11-006 : notifications de synchro des dispositions, par genre.
+	lightsLayoutSynced, shuttersLayoutSynced int
 }
 
 func newNamesRig(t *testing.T, iamEnabled bool, withStorage bool) *namesRig {
@@ -37,6 +39,7 @@ func newNamesRig(t *testing.T, iamEnabled bool, withStorage bool) *namesRig {
 	names := core.NewLightNameStore(rig.path)
 	h.SetLightNames(names, func() { rig.synced++ })
 	h.SetShutterNames(names, func() { rig.shutterSynced++ })
+	h.SetObjectLayout(names, func() { rig.lightsLayoutSynced++ }, func() { rig.shuttersLayoutSynced++ })
 	sessions := laniam.NewSessionStore(1)
 	for i, role := range []string{models.LanRoleAdmin, models.LanRoleUser} {
 		sess, err := sessions.CreateSession(&models.LanUser{ID: i + 1, Email: role + "@example.org", Role: role})

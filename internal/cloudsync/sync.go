@@ -53,6 +53,10 @@ type Agent struct {
 	// noms-volets-2026-11-005 : même magasin, synchronisation distincte.
 	shutterNamesMu sync.Mutex
 	shutterNames   *core.LightNameStore
+	// affichage-objets-2026-11-006 : même magasin, une synchronisation par genre.
+	layoutMu     sync.Mutex
+	layoutStore  *core.LightNameStore
+	layoutKindMu [2]sync.Mutex
 }
 
 func NewAgent(cfg Config, actionService *core.ActionService, store data.Store, pull *core.ExchangePullScheduler) *Agent {
@@ -122,6 +126,7 @@ func (a *Agent) pollCycle(ctx context.Context, clientID string) {
 	}
 	a.pushExchangeProfileAware(ctx, clientID)
 	a.syncNames(ctx)
+	a.syncLayouts(ctx)
 	a.heartbeat(ctx)
 }
 
