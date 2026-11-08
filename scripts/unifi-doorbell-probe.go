@@ -182,17 +182,17 @@ func main() {
 		}
 	}
 
-	fmt.Println("== 3. Repli par interrogation (champ lastRing de la caméra)")
+	fmt.Println("== 3. Information : champ lastRing (API privée, session par cookie ; le code ne l'utilise plus)")
 	code, _, body, _, err = get("/proxy/protect/api/cameras/" + url.PathEscape(target))
 	if err != nil || code != 200 {
-		fmt.Printf("   interrogation KO : statut %d\n", code)
+		fmt.Printf("   interrogation sans cookie : statut %d (attendu : 401, le flux est la seule source)\n", code)
 	} else {
 		var cam map[string]any
 		_ = json.Unmarshal(body, &cam)
 		if v, ok := cam["lastRing"]; ok {
 			fmt.Printf("   lastRing présent (type %T) : l'interrogation toutes les 2 s est possible\n", v)
 		} else {
-			fmt.Println("   lastRing ABSENT : le repli par interrogation ne fonctionnera pas tel quel")
+			fmt.Println("   lastRing ABSENT : pas de repli par interrogation")
 		}
 	}
 

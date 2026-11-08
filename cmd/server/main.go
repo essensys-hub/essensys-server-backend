@@ -250,9 +250,10 @@ func main() {
 			log.Println("Initialized UniFi Protect Handler (using API key)")
 			doorbellHandler.Cameras = unifiClient.GetCameras
 			doorbellHandler.Snapshot = unifiClient.GetCameraSnapshot
-			stream := unifi.NewStreamSource(cfg.UniFi)
-			stream.Fallback = unifi.NewPollSource(cfg.UniFi)
-			doorbellSource = stream
+			// Pas de repli par interrogation : lastRing n'existe que dans l'API Protect privée, qui
+			// exige une session par cookie (la clé d'API seule renvoie 401, constaté sur la console
+			// réelle le 2026-11-08). Le flux d'événements se reconnecte avec attente croissante.
+			doorbellSource = unifi.NewStreamSource(cfg.UniFi)
 		}
 	}
 	doorbellSup := core.NewDoorbellSupervisor(doorbellSvc, doorbellSource)
