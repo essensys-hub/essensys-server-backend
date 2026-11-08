@@ -37,6 +37,8 @@ const (
 
 // RingEvent est une pression de la sonnette.
 type RingEvent struct {
+	// ID : identifiant de l'événement UniFi (vide si la source n'en fournit pas).
+	ID       string
 	CameraID string
 	At       time.Time
 }
@@ -153,7 +155,7 @@ func ringFromMessage(raw []byte, cameraID string) (id string, ev *RingEvent) {
 	if m.Item.Start > 0 {
 		at = time.UnixMilli(m.Item.Start)
 	}
-	return m.Item.ID, &RingEvent{CameraID: cameraID, At: at}
+	return m.Item.ID, &RingEvent{ID: m.Item.ID, CameraID: cameraID, At: at}
 }
 
 // Run implémente EventSource.

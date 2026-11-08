@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"log"
 	"sort"
@@ -66,6 +68,8 @@ type DoorbellStatus struct {
 	Ringing      bool    `json:"ringing"`
 	RingingUntil *string `json:"ringing_until"`
 	LastRingAt   *string `json:"last_ring_at"`
+	// InWindow : la case horaire de l'instant courant est active (sonnette-plages-push).
+	InWindow bool `json:"in_window"`
 }
 
 // DoorbellRingResult décrit ce qu'une pression a déclenché.
@@ -86,6 +90,9 @@ type DoorbellService struct {
 	Now   func() time.Time
 	Sleep func(time.Duration)
 	Phase time.Duration
+	// Notifier signale un appui valide (dans la plage) au cloud ; appelé en tâche de fond, il
+	// ne retarde jamais le clignotement. nil : aucun signalement.
+	Notifier func(ringID string, at time.Time)
 
 	mu           sync.Mutex
 	available    bool
@@ -93,6 +100,8 @@ type DoorbellService struct {
 	lastRing     time.Time
 	running      bool
 	lastSeqStart time.Time
+	lastNotify   time.Time
+	notifyWG     sync.WaitGroup
 	seqLights    map[string]bool // lumières de la séquence en cours
 	excluded     map[string]bool // lumières commandées à la main pendant la séquence
 	wg           sync.WaitGroup
@@ -126,7 +135,7 @@ func (s *DoorbellService) Close() {
 }
 
 // WaitIdle attend la fin de la séquence en cours (tests).
-func (s *DoorbellService) WaitIdle() { s.wg.Wait() }
+func (s *DoorbellService) WaitIdle() { s.wg.Wait(); s.notifyWG.Wait() }
 
 // SetAvailable est appelé par la source d'événements : la console est joignable ou non.
 func (s *DoorbellService) SetAvailable(ok bool) {
@@ -141,7 +150,8 @@ func (s *DoorbellService) Status() DoorbellStatus {
 	now := s.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := DoorbellStatus{Enabled: settings.Enabled, Available: settings.Enabled && s.available}
+	st := DoorbellStatus{Enabled: settings.Enabled, Available: settings.Enabled && s.available,
+		InWindow: settings.Schedule.ActiveAt(now)}
 	if !s.lastRing.IsZero() {
 		at := s.lastRing.UTC().Format(lightNameTimeLayout)
 		st.LastRingAt = &at
@@ -161,19 +171,62 @@ func (s *DoorbellService) HandleRing(ev unifi.RingEvent) {
 	if !settings.Enabled || settings.CameraID == "" || ev.CameraID != settings.CameraID {
 		return
 	}
-	s.Ring(false)
+	at := ev.At
+	if at.IsZero() {
+		at = s.Now()
+	}
+	id := ev.ID
+	if id == "" {
+		id = newRingID()
+	}
+	s.press(true, false, at, id)
+}
+
+func newRingID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 16)
+	}
+	b[6] = b[6]&0x0f | 0x40
+	b[8] = b[8]&0x3f | 0x80
+	h := hex.EncodeToString(b[:])
+	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
 }
 
 // Ring enregistre une pression (vraie ou essai) et lance la séquence de clignotement si
 // aucune n'est en cours ni récente. dryRun : aucune écriture dans la table d'échange.
+// Cet appel est l'« Essayer » : il ignore la plage horaire et ne prévient pas le cloud.
 func (s *DoorbellService) Ring(dryRun bool) DoorbellRingResult {
+	return s.press(false, dryRun, time.Time{}, "")
+}
+
+// press traite une pression. real : vraie pression de la sonnette (plage évaluée à l'heure at,
+// signalement au cloud) ; sinon essai.
+func (s *DoorbellService) press(real, dryRun bool, at time.Time, ringID string) DoorbellRingResult {
 	settings := s.store.Doorbell()
 	now := s.Now()
+	inWindow := !real || settings.Schedule.ActiveAt(at)
 
 	s.mu.Lock()
 	s.lastRing = now
 	s.ringingUntil = now.Add(DoorbellRingingDuration)
 	res := DoorbellRingResult{DryRun: dryRun}
+	if !inWindow {
+		// Hors plage : ni clignotement, ni signalement, anti-rafale non armé ; ringing reste vrai.
+		s.mu.Unlock()
+		return res
+	}
+	if real && s.Notifier != nil && (s.lastNotify.IsZero() || now.Sub(s.lastNotify) >= DoorbellBurstWindow) {
+		s.lastNotify = now
+		notify := s.Notifier
+		s.notifyWG.Add(1)
+		defer func() {
+			go func() {
+				defer s.notifyWG.Done()
+				notify(ringID, at)
+			}()
+		}()
+	}
 	var ids []string
 	for _, id := range settings.Lights {
 		if _, ok := lightCommands[id]; ok {
