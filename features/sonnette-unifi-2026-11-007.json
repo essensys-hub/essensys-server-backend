@@ -52,7 +52,7 @@
     ],
     "coverage_must_test": [
       "reglages et essai reserves a lan_admin",
-      "sequence complete et restauration des lumieres choisies",
+      "sequence complete finit allumee",
       "essai a sec sans ecriture dans l'armoire",
       "aucune adresse ni cle dans les journaux"
     ],
@@ -61,7 +61,7 @@
     ]
   },
   "release": {
-    "changelog_entry": "Gateway : sonnette UniFi (détection de la sonnerie, clignotement puis restauration des lumières choisies, GET /api/doorbell/status et /stream, GET/PUT /api/admin/doorbell/settings et POST /api/admin/doorbell/test réservés à lan_admin) ; réglages dans la section doorbell du fichier des noms (#25).",
+    "changelog_entry": "Gateway : sonnette UniFi (détection de la sonnerie, clignotement puis lumières choisies allumées, GET /api/doorbell/status et /stream, GET/PUT /api/admin/doorbell/settings et POST /api/admin/doorbell/test réservés à lan_admin) ; réglages dans la section doorbell du fichier des noms (#25).",
     "target_tag": null,
     "surfaces": [
       "essensys-server-backend"

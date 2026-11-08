@@ -73,7 +73,7 @@ func newDoorbellRig(t *testing.T, iamEnabled, withStorage bool) *doorbellRig {
 	as := core.NewActionService(store)
 	// L'écrivain de la séquence est celui de production (file d'actions en mémoire) : les tests
 	// vérifient que la file reste vide.
-	rig.svc = core.NewDoorbellService(rig.names, core.ExchangeDoorbellWriter{Actions: as, Store: store}, core.ExchangeLightState{Store: store})
+	rig.svc = core.NewDoorbellService(rig.names, core.ExchangeDoorbellWriter{Actions: as, Store: store})
 	rig.svc.Sleep = func(time.Duration) {}
 	t.Cleanup(rig.svc.Close)
 	rig.h = NewDoorbellHandler(rig.svc, rig.names)

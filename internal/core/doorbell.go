@@ -14,7 +14,7 @@ import (
 )
 
 // Service « sonnette » (sonnette-unifi-2026-11-007) : mémorise la sonnerie en cours, fait
-// clignoter les lumières choisies puis les remet dans leur état d'origine. Les écritures dans la
+// clignoter les lumières choisies (elles finissent allumées). Les écritures dans la
 // table d'échange passent par DoorbellWriter (le chemin des commandes de lumières) ; les
 // essais automatiques injectent un faux écrivain, jamais l'armoire.
 
@@ -59,11 +59,6 @@ type DoorbellWriter interface {
 	Write(params []protocol.ExchangeKV) error
 }
 
-// DoorbellLightState donne l'état courant d'une lumière. known=false : état inconnu.
-type DoorbellLightState interface {
-	LightOn(id string) (on, known bool)
-}
-
 // DoorbellStatus est la réponse de GET /api/doorbell/status.
 type DoorbellStatus struct {
 	Enabled      bool    `json:"enabled"`
@@ -86,7 +81,6 @@ type DoorbellRingResult struct {
 type DoorbellService struct {
 	store  *LightNameStore
 	writer DoorbellWriter
-	state  DoorbellLightState
 
 	// Injectables pour les tests.
 	Now   func() time.Time
@@ -106,11 +100,11 @@ type DoorbellService struct {
 	stopOnce     sync.Once
 }
 
-// NewDoorbellService crée le service. writer et state peuvent être nil (aucune écriture : la
+// NewDoorbellService crée le service. writer peut être nil (aucune écriture : la
 // sonnerie est signalée mais rien ne clignote).
-func NewDoorbellService(store *LightNameStore, writer DoorbellWriter, state DoorbellLightState) *DoorbellService {
+func NewDoorbellService(store *LightNameStore, writer DoorbellWriter) *DoorbellService {
 	s := &DoorbellService{
-		store: store, writer: writer, state: state,
+		store: store, writer: writer,
 		Now: time.Now, Phase: DoorbellPhase,
 		stop: make(chan struct{}),
 	}
@@ -125,7 +119,7 @@ func NewDoorbellService(store *LightNameStore, writer DoorbellWriter, state Door
 	return s
 }
 
-// Close interrompt les séquences en cours (les lumières sont tout de même restaurées).
+// Close interrompt les séquences en cours (les lumières choisies sont laissées allumées).
 func (s *DoorbellService) Close() {
 	s.stopOnce.Do(func() { close(s.stop) })
 	s.wg.Wait()
@@ -288,15 +282,6 @@ func (s *DoorbellService) sequence(ids []string, blinks int) {
 		s.mu.Unlock()
 	}()
 
-	// État d'origine, lu une seule fois avant le premier ordre. État inconnu : éteint.
-	initial := map[string]bool{}
-	for _, id := range ids {
-		on := false
-		if s.state != nil {
-			on, _ = s.state.LightOn(id)
-		}
-		initial[id] = on
-	}
 	phase := s.Phase
 	if phase <= 0 {
 		phase = DoorbellPhase
@@ -320,16 +305,29 @@ func (s *DoorbellService) sequence(ids []string, blinks int) {
 		}
 		return true
 	}
-	ok := true
-	for i := 0; i < blinks && ok; i++ {
-		ok = step(true) && step(false)
+	// blinks cycles éteint/allumé ; le dernier ordre allume : les lumières choisies finissent
+	// allumées (décision de l'utilisateur), sauf celles commandées à la main (exclues).
+	for i := 0; i < blinks; i++ {
+		if !step(false) || !step(true) {
+			break
+		}
 	}
-	// Restauration : seulement les lumières encore dans la séquence, à leur état d'origine.
-	restore := map[string]bool{}
-	for _, id := range s.active(ids) {
-		restore[id] = initial[id]
+	// Arrêt en cours de séquence : on laisse les lumières allumées.
+	if len(s.active(ids)) > 0 {
+		select {
+		case <-s.stop:
+			s.put(allOn(s.active(ids)))
+		default:
+		}
 	}
-	s.put(restore)
+}
+
+func allOn(ids []string) map[string]bool {
+	m := map[string]bool{}
+	for _, id := range ids {
+		m[id] = true
+	}
+	return m
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -434,39 +432,4 @@ func (w ExchangeDoorbellWriter) Write(params []protocol.ExchangeKV) error {
 		return ErrDoorbellWrite
 	}
 	return nil
-}
-
-// ExchangeLightState lit l'état d'une lumière dans la table d'échange : allumée si son bit est
-// dans l'ordre d'allumage et pas dans l'ordre d'extinction, éteinte dans le cas inverse,
-// inconnue sinon (la table ne garde que le dernier bloc d'ordres).
-type ExchangeLightState struct {
-	Store interface {
-		GetValue(clientID string, index int) (string, bool)
-		GetLastPolledClientID() (string, bool)
-	}
-}
-
-// LightOn implémente DoorbellLightState.
-func (e ExchangeLightState) LightOn(id string) (on, known bool) {
-	c, ok := lightCommands[id]
-	if !ok || e.Store == nil {
-		return false, false
-	}
-	clientID := "default"
-	if cid, ok := e.Store.GetLastPolledClientID(); ok && cid != "" {
-		clientID = cid
-	}
-	bit := func(idx int) bool {
-		v, ok := e.Store.GetValue(clientID, idx)
-		n, err := strconv.Atoi(v)
-		return ok && err == nil && n&c.Mask != 0
-	}
-	onSet, offSet := bit(c.On), bit(c.Off)
-	switch {
-	case onSet && !offSet:
-		return true, true
-	case offSet && !onSet:
-		return false, true
-	}
-	return false, false
 }

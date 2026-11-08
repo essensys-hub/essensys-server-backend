@@ -192,10 +192,6 @@ func (f *fakeWriter) all() [][]protocol.ExchangeKV {
 	return append([][]protocol.ExchangeKV{}, f.blocks...)
 }
 
-type fakeState map[string]bool
-
-func (f fakeState) LightOn(id string) (bool, bool) { v, ok := f[id]; return v, ok }
-
 type clock struct {
 	mu sync.Mutex
 	t  time.Time
@@ -215,14 +211,14 @@ type rig struct {
 	st  *LightNameStore
 }
 
-func newDoorbellRig(t *testing.T, lights []string, blinks int, state fakeState) *rig {
+func newDoorbellRig(t *testing.T, lights []string, blinks int) *rig {
 	t.Helper()
 	st, _ := doorbellStore(t)
 	if _, err := st.SetDoorbell(true, testDoorbellCam, lights, blinks, "admin@example.org", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	w := &fakeWriter{}
-	svc := NewDoorbellService(st, w, state)
+	svc := NewDoorbellService(st, w)
 	clk := &clock{t: time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC)}
 	svc.Now = clk.now
 	svc.Sleep = func(time.Duration) {} // pas d'attente réelle
@@ -232,9 +228,8 @@ func newDoorbellRig(t *testing.T, lights []string, blinks int, state fakeState) 
 
 func kv(k int, v string) protocol.ExchangeKV { return protocol.ExchangeKV{K: k, V: v} }
 
-func TestDoorbell_sequenceCompleteEtRestauration(t *testing.T) {
-	// salon (612/606, 128) allumé ; entrée (611/605, 1) éteinte
-	r := newDoorbellRig(t, []string{"salon", "entree"}, 2, fakeState{"salon": true, "entree": false})
+func TestDoorbell_sequenceCompleteFinitAllumee(t *testing.T) {
+	r := newDoorbellRig(t, []string{"salon", "entree"}, 2)
 	res := r.svc.Ring(false)
 	if !res.Sequence || res.Lights != 2 {
 		t.Fatalf("%+v", res)
@@ -242,12 +237,11 @@ func TestDoorbell_sequenceCompleteEtRestauration(t *testing.T) {
 	r.svc.WaitIdle()
 	on := []protocol.ExchangeKV{kv(611, "1"), kv(612, "128")}
 	off := []protocol.ExchangeKV{kv(605, "1"), kv(606, "128")}
-	restore := []protocol.ExchangeKV{kv(605, "1"), kv(612, "128")} // entrée éteinte, salon allumé
-	want := [][]protocol.ExchangeKV{on, off, on, off, restore}
+	// 2 cycles éteint/allumé ; le dernier ordre allume
+	want := [][]protocol.ExchangeKV{off, on, off, on}
 	if got := r.w.all(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("blocs écrits :\n%v\nattendu :\n%v", got, want)
 	}
-	// seules les lumières choisies : aucun ordre hors 605-616 (donc aucun volet)
 	for _, b := range r.w.all() {
 		for _, p := range b {
 			if p.K < 605 || p.K > 616 {
@@ -259,17 +253,17 @@ func TestDoorbell_sequenceCompleteEtRestauration(t *testing.T) {
 
 func TestDoorbell_masquesCumulesParIndice(t *testing.T) {
 	// terrasse 4, deg1 1, deg2 2 partagent 616/610
-	r := newDoorbellRig(t, []string{"terrasse", "deg1", "deg2"}, 1, fakeState{})
+	r := newDoorbellRig(t, []string{"terrasse", "deg1", "deg2"}, 1)
 	r.svc.Ring(false)
 	r.svc.WaitIdle()
 	got := r.w.all()
-	if len(got) != 3 || !reflect.DeepEqual(got[0], []protocol.ExchangeKV{kv(616, "7")}) || !reflect.DeepEqual(got[1], []protocol.ExchangeKV{kv(610, "7")}) {
+	if len(got) != 2 || !reflect.DeepEqual(got[0], []protocol.ExchangeKV{kv(610, "7")}) || !reflect.DeepEqual(got[1], []protocol.ExchangeKV{kv(616, "7")}) {
 		t.Fatalf("%v", got)
 	}
 }
 
 func TestDoorbell_rafaleUneSeuleSequence(t *testing.T) {
-	r := newDoorbellRig(t, []string{"salon"}, 1, fakeState{"salon": false})
+	r := newDoorbellRig(t, []string{"salon"}, 1)
 	r.svc.Ring(false)
 	r.svc.WaitIdle()
 	n := len(r.w.all())
@@ -297,7 +291,7 @@ func TestDoorbell_rafaleUneSeuleSequence(t *testing.T) {
 }
 
 func TestDoorbell_pressionPendantLaSequenceIgnoree(t *testing.T) {
-	r := newDoorbellRig(t, []string{"salon"}, 1, fakeState{})
+	r := newDoorbellRig(t, []string{"salon"}, 1)
 	started := make(chan struct{})
 	release := make(chan struct{})
 	var once sync.Once
@@ -313,7 +307,7 @@ func TestDoorbell_pressionPendantLaSequenceIgnoree(t *testing.T) {
 }
 
 func TestDoorbell_commandeManuellePendantLaSequence(t *testing.T) {
-	r := newDoorbellRig(t, []string{"salon", "entree"}, 2, fakeState{"salon": true, "entree": true})
+	r := newDoorbellRig(t, []string{"salon", "entree"}, 2)
 	calls := 0
 	r.svc.Sleep = func(time.Duration) {
 		calls++
@@ -324,7 +318,7 @@ func TestDoorbell_commandeManuellePendantLaSequence(t *testing.T) {
 	r.svc.Ring(false)
 	r.svc.WaitIdle()
 	blocks := r.w.all()
-	// après la commande manuelle : plus aucun ordre pour le salon (612/606), entrée restaurée allumée
+	// après la commande manuelle : plus aucun ordre pour le salon (612/606), entrée finit allumée
 	for _, b := range blocks[2:] {
 		for _, p := range b {
 			if p.K == 612 || p.K == 606 {
@@ -334,12 +328,12 @@ func TestDoorbell_commandeManuellePendantLaSequence(t *testing.T) {
 	}
 	last := blocks[len(blocks)-1]
 	if !reflect.DeepEqual(last, []protocol.ExchangeKV{kv(611, "1")}) {
-		t.Fatalf("restauration de l'entrée seule attendue : %v", last)
+		t.Fatalf("dernier ordre : allumer l'entrée seule : %v", last)
 	}
 }
 
 func TestDoorbell_commandeManuelleHorsSequenceOuAutreLumiere(t *testing.T) {
-	r := newDoorbellRig(t, []string{"salon"}, 1, fakeState{"salon": false})
+	r := newDoorbellRig(t, []string{"salon"}, 1)
 	r.svc.NoteCommand([]protocol.ExchangeKV{kv(606, "128")}) // hors séquence : sans effet
 	calls := 0
 	r.svc.Sleep = func(time.Duration) {
@@ -351,13 +345,13 @@ func TestDoorbell_commandeManuelleHorsSequenceOuAutreLumiere(t *testing.T) {
 	}
 	r.svc.Ring(false)
 	r.svc.WaitIdle()
-	if blocks := r.w.all(); len(blocks) != 3 { // on, off, restauration
+	if blocks := r.w.all(); len(blocks) != 2 { // off, on
 		t.Fatalf("%v", blocks)
 	}
 }
 
 func TestDoorbell_aucuneLumiereChoisie(t *testing.T) {
-	r := newDoorbellRig(t, []string{}, 3, fakeState{})
+	r := newDoorbellRig(t, []string{}, 3)
 	res := r.svc.Ring(false)
 	r.svc.WaitIdle()
 	if res.Sequence || len(r.w.all()) != 0 {
@@ -370,7 +364,7 @@ func TestDoorbell_aucuneLumiereChoisie(t *testing.T) {
 }
 
 func TestDoorbell_etatRingingSoixanteSecondes(t *testing.T) {
-	r := newDoorbellRig(t, []string{}, 3, nil)
+	r := newDoorbellRig(t, []string{}, 3)
 	if r.svc.Status().Ringing {
 		t.Fatal("pas de sonnerie au départ")
 	}
@@ -393,7 +387,7 @@ func TestDoorbell_etatRingingSoixanteSecondes(t *testing.T) {
 }
 
 func TestDoorbell_essaiASecAucuneEcriture(t *testing.T) {
-	r := newDoorbellRig(t, []string{"salon", "entree"}, 3, fakeState{})
+	r := newDoorbellRig(t, []string{"salon", "entree"}, 3)
 	res := r.svc.Ring(true)
 	r.svc.WaitIdle()
 	if !res.DryRun || !res.Sequence || res.Lights != 2 {
@@ -413,7 +407,7 @@ func TestDoorbell_essaiASecAucuneEcriture(t *testing.T) {
 }
 
 func TestDoorbell_ecritureEnEchecArreteLaSequence(t *testing.T) {
-	r := newDoorbellRig(t, []string{"salon"}, 3, fakeState{})
+	r := newDoorbellRig(t, []string{"salon"}, 3)
 	r.w.fail = true
 	r.svc.Ring(false)
 	r.svc.WaitIdle() // ne bloque pas
@@ -426,7 +420,7 @@ func TestDoorbell_ecritureEnEchecArreteLaSequence(t *testing.T) {
 }
 
 func TestDoorbell_HandleRingFiltreCameraEtActivation(t *testing.T) {
-	r := newDoorbellRig(t, []string{"salon"}, 1, fakeState{})
+	r := newDoorbellRig(t, []string{"salon"}, 1)
 	r.svc.HandleRing(unifi.RingEvent{CameraID: "autre-camera"})
 	r.svc.WaitIdle()
 	if r.svc.Status().Ringing || len(r.w.all()) != 0 {
@@ -438,7 +432,7 @@ func TestDoorbell_HandleRingFiltreCameraEtActivation(t *testing.T) {
 		t.Fatal("la caméra choisie déclenche")
 	}
 	// fonction désactivée
-	r2 := newDoorbellRig(t, []string{"salon"}, 1, fakeState{})
+	r2 := newDoorbellRig(t, []string{"salon"}, 1)
 	if _, err := r2.st.SetDoorbell(false, testDoorbellCam, []string{"salon"}, 1, "x", time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +443,7 @@ func TestDoorbell_HandleRingFiltreCameraEtActivation(t *testing.T) {
 }
 
 func TestDoorbell_disponibiliteSeulementSiActive(t *testing.T) {
-	r := newDoorbellRig(t, []string{}, 1, nil)
+	r := newDoorbellRig(t, []string{}, 1)
 	if r.svc.Status().Available {
 		t.Fatal("injoignable au départ")
 	}
@@ -461,7 +455,7 @@ func TestDoorbell_disponibiliteSeulementSiActive(t *testing.T) {
 	if r.svc.Status().Available {
 		t.Fatal("console perdue")
 	}
-	off := NewDoorbellService(NewLightNameStore(""), nil, nil)
+	off := NewDoorbellService(NewLightNameStore(""), nil)
 	off.SetAvailable(true)
 	if s := off.Status(); s.Available || s.Enabled {
 		t.Fatalf("désactivé : %+v", s)
@@ -471,7 +465,7 @@ func TestDoorbell_disponibiliteSeulementSiActive(t *testing.T) {
 func TestDoorbell_ObservateurDeCommandesDeLActionService(t *testing.T) {
 	store := data.NewMemoryStore()
 	as := NewActionService(store)
-	r := newDoorbellRig(t, []string{"salon"}, 1, fakeState{})
+	r := newDoorbellRig(t, []string{"salon"}, 1)
 	r.svc.mu.Lock()
 	r.svc.running, r.svc.seqLights, r.svc.excluded = true, map[string]bool{"salon": true}, map[string]bool{}
 	r.svc.mu.Unlock()
@@ -492,31 +486,6 @@ func TestDoorbell_ObservateurDeCommandesDeLActionService(t *testing.T) {
 	r.svc.mu.Lock()
 	r.svc.running = false
 	r.svc.mu.Unlock()
-}
-
-func TestExchangeLightState(t *testing.T) {
-	store := data.NewMemoryStore()
-	st := ExchangeLightState{Store: store}
-	if _, known := st.LightOn("salon"); known {
-		t.Fatal("table vide : inconnu")
-	}
-	store.SetValue("default", 612, "128")
-	store.SetValue("default", 606, "0")
-	if on, known := st.LightOn("salon"); !on || !known {
-		t.Fatal("allumée")
-	}
-	store.SetValue("default", 612, "0")
-	store.SetValue("default", 606, "128")
-	if on, known := st.LightOn("salon"); on || !known {
-		t.Fatal("éteinte")
-	}
-	store.SetValue("default", 612, "128")
-	if _, known := st.LightOn("salon"); known {
-		t.Fatal("ordres contradictoires : inconnu")
-	}
-	if _, known := st.LightOn("nimporte"); known {
-		t.Fatal("lumière inconnue")
-	}
 }
 
 func TestExchangeDoorbellWriter_miseEnFile(t *testing.T) {
@@ -578,7 +547,7 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 
 func TestDoorbellSupervisor_suitLesReglages(t *testing.T) {
 	st, _ := doorbellStore(t)
-	svc := NewDoorbellService(st, nil, nil)
+	svc := NewDoorbellService(st, nil)
 	src := &fakeSource{}
 	sup := NewDoorbellSupervisor(svc, src)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -604,7 +573,7 @@ func TestDoorbellSupervisor_suitLesReglages(t *testing.T) {
 func TestDoorbellSupervisor_UniFiDesactiveAucuneEcoute(t *testing.T) {
 	st, _ := doorbellStore(t)
 	_, _ = st.SetDoorbell(true, "cam-a", []string{}, 3, "x", time.Now())
-	svc := NewDoorbellService(st, nil, nil)
+	svc := NewDoorbellService(st, nil)
 	sup := NewDoorbellSupervisor(svc, nil) // pas de source : UniFi désactivé
 	sup.Start(context.Background())
 	sup.Reconfigure()

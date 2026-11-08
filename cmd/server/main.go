@@ -235,8 +235,7 @@ func main() {
 	// Sonnette UniFi (sonnette-unifi-2026-11-007) : service toujours créé (réglages lisibles,
 	// available=false) ; l'écoute des événements n'existe que si UniFi est activé avec une clé.
 	doorbellSvc := core.NewDoorbellService(lightNames,
-		core.ExchangeDoorbellWriter{Actions: actionService, Store: store},
-		core.ExchangeLightState{Store: store})
+		core.ExchangeDoorbellWriter{Actions: actionService, Store: store})
 	actionService.SetCommandObserver(doorbellSvc.NoteCommand)
 	doorbellHandler := api.NewDoorbellHandler(doorbellSvc, lightNames)
 	doorbellHandler.Audit = auditSvc

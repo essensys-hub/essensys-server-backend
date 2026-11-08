@@ -1,6 +1,6 @@
 ## Purpose
 
-Détecter la pression de la sonnette UniFi, faire clignoter les lumières choisies par l'administrateur puis les restaurer, servir l'état et la vidéo sur le réseau local, et conserver les réglages dans le fichier existant.
+Détecter la pression de la sonnette UniFi, faire clignoter les lumières choisies par l'administrateur (elles finissent allumées), servir l'état et la vidéo sur le réseau local, et conserver les réglages dans le fichier existant.
 
 ## ADDED Requirements
 
@@ -21,13 +21,13 @@ La gateway SHALL écouter les événements UniFi Protect de la caméra de sonnet
 - **WHEN** la gateway démarre
 - **THEN** elle fonctionne normalement et `available=false`
 
-### Requirement: Clignotement et restauration
-À chaque sonnerie acceptée, la gateway SHALL faire clignoter les seules lumières choisies `blinks` fois puis les remettre dans l'état qu'elles avaient avant la séquence. Elle MUST NOT toucher aux autres lumières ni aux volets.
+### Requirement: Clignotement, lumières finissant allumées
+À chaque sonnerie acceptée, la gateway SHALL faire clignoter les seules lumières choisies `blinks` fois (cycles éteint/allumé, dernier ordre = allumer) : les lumières choisies finissent allumées, sans lecture ni restauration de leur état d'origine. Elle MUST NOT toucher aux autres lumières ni aux volets.
 
 #### Scenario: Séquence complète
-- **GIVEN** deux lumières choisies, l'une allumée et l'autre éteinte
+- **GIVEN** deux lumières choisies, 
 - **WHEN** la sonnette est pressée
-- **THEN** seules ces deux lumières reçoivent des ordres, alternés `blinks` fois, puis retrouvent leur état initial
+- **THEN** seules ces deux lumières reçoivent des ordres, alternés `blinks` fois (éteint puis allumé) et finissent allumées
 
 #### Scenario: Rafale
 - **WHEN** la sonnette est pressée trois fois en 10 s
@@ -35,7 +35,7 @@ La gateway SHALL écouter les événements UniFi Protect de la caméra de sonnet
 
 #### Scenario: Commande manuelle pendant la séquence
 - **WHEN** un utilisateur commande une lumière pendant qu'elle clignote
-- **THEN** elle est exclue de la séquence et n'est pas restaurée
+- **THEN** elle est exclue de la séquence : aucun ordre ne lui est plus envoyé
 
 #### Scenario: Aucune lumière choisie
 - **WHEN** la sonnette est pressée sans lumière choisie
