@@ -16,6 +16,8 @@ type RouterConfig struct {
 	Handler            *Handler
 	WebHandler         *WebHandler
 	UniFiHandler       *UniFiHandler
+	// Sonnette UniFi (sonnette-unifi-2026-11-007) : nil = routes non montées.
+	DoorbellHandler    *DoorbellHandler
 	LanIAMHandler      *LanIAMHandler
 	AuditHandler       *AuditHandler
 	LanSessionStore    *laniam.SessionStore
@@ -92,6 +94,21 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	apiMux.Handle("/api/shutters/layout", protect(http.HandlerFunc(cfg.Handler.GetShuttersLayout)))
 	apiMux.Handle("/api/admin/lights/layout", adminOnlyJSON(http.HandlerFunc(cfg.Handler.PutAdminLightsLayout)))
 	apiMux.Handle("/api/admin/shutters/layout", adminOnlyJSON(http.HandlerFunc(cfg.Handler.PutAdminShuttersLayout)))
+
+	// Sonnette UniFi (sonnette-unifi-2026-11-007) : état et vidéo pour tout utilisateur
+	// authentifié ; réglages et essai réservés à lan_admin.
+	if cfg.DoorbellHandler != nil {
+		apiMux.Handle("/api/doorbell/status", protect(http.HandlerFunc(cfg.DoorbellHandler.GetStatus)))
+		apiMux.Handle("/api/doorbell/stream", protect(http.HandlerFunc(cfg.DoorbellHandler.GetStream)))
+		apiMux.Handle("/api/admin/doorbell/settings", adminOnlyJSON(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPut {
+				cfg.DoorbellHandler.PutAdminSettings(w, r)
+				return
+			}
+			cfg.DoorbellHandler.GetAdminSettings(w, r)
+		})))
+		apiMux.Handle("/api/admin/doorbell/test", adminOnlyJSON(http.HandlerFunc(cfg.DoorbellHandler.PostAdminTest)))
+	}
 	apiMux.Handle("/api/admin/scenarios/sync", protect(http.HandlerFunc(cfg.Handler.AdminScenariosSync)))
 	apiMux.Handle("/api/scenarios", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))
 	apiMux.Handle("/api/scenarios/", protect(http.HandlerFunc(cfg.Handler.HandleScenarios)))

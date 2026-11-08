@@ -232,6 +232,15 @@ func main() {
 
 	// Initialize UniFi Protect client (if enabled)
 	var unifiHandler *api.UniFiHandler
+	// Sonnette UniFi (sonnette-unifi-2026-11-007) : service toujours créé (réglages lisibles,
+	// available=false) ; l'écoute des événements n'existe que si UniFi est activé avec une clé.
+	doorbellSvc := core.NewDoorbellService(lightNames,
+		core.ExchangeDoorbellWriter{Actions: actionService, Store: store},
+		core.ExchangeLightState{Store: store})
+	actionService.SetCommandObserver(doorbellSvc.NoteCommand)
+	doorbellHandler := api.NewDoorbellHandler(doorbellSvc, lightNames)
+	doorbellHandler.Audit = auditSvc
+	var doorbellSource unifi.EventSource
 	if cfg.UniFi.Enabled {
 		if cfg.UniFi.APIKey == "" {
 			log.Printf("WARNING: UniFi Protect enabled but API key not configured. UniFi features disabled.")
@@ -240,8 +249,19 @@ func main() {
 			unifiClient := unifi.NewClient(cfg.UniFi)
 			unifiHandler = api.NewUniFiHandler(unifiClient)
 			log.Println("Initialized UniFi Protect Handler (using API key)")
+			doorbellHandler.Cameras = unifiClient.GetCameras
+			doorbellHandler.Snapshot = unifiClient.GetCameraSnapshot
+			stream := unifi.NewStreamSource(cfg.UniFi)
+			stream.Fallback = unifi.NewPollSource(cfg.UniFi)
+			doorbellSource = stream
 		}
 	}
+	doorbellSup := core.NewDoorbellSupervisor(doorbellSvc, doorbellSource)
+	doorbellHandler.OnSettingsChanged = doorbellSup.Reconfigure
+	doorbellCtx, doorbellCancel := context.WithCancel(context.Background())
+	defer doorbellCancel()
+	defer doorbellSvc.Close()
+	doorbellSup.Start(doorbellCtx)
 
 	passiveCapture := cfg.LanIAM.PassiveAuthCapture
 	if cfg.LanIAM.Enabled {
@@ -276,6 +296,7 @@ func main() {
 		PluginsHandler:     pluginsHandler,
 		WebHandler:         webHandler,
 		UniFiHandler:       unifiHandler,
+		DoorbellHandler:    doorbellHandler,
 		LanIAMHandler:      lanIAMHandler,
 		AuditHandler:       auditHandler,
 		LanSessionStore:    lanSessionStore,

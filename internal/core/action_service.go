@@ -37,6 +37,18 @@ type ActionService struct {
 		EntityType string
 		EntityID   string
 	}
+	// observer est prévenu de chaque ordre venu d'un utilisateur ou d'un automatisme
+	// (sonnette-unifi-2026-11-007 : une lumière commandée à la main sort de la séquence).
+	observer func(params []protocol.ExchangeKV)
+}
+
+// SetCommandObserver enregistre l'observateur des ordres (appelé avant la mise en file).
+func (s *ActionService) SetCommandObserver(fn func(params []protocol.ExchangeKV)) { s.observer = fn }
+
+// AddActionsUnobserved met des ordres en file comme AddActions, sans prévenir l'observateur
+// (écritures de la séquence de la sonnette elle-même).
+func (s *ActionService) AddActionsUnobserved(clientID string, params []protocol.ExchangeKV) ([]string, error) {
+	return s.addActions(clientID, params)
 }
 
 // NewActionService creates a new ActionService instance
@@ -71,6 +83,13 @@ func (s *ActionService) AddAction(clientID string, params []protocol.ExchangeKV)
 
 // AddActions enqueues one or more firmware actions (max 30 params each).
 func (s *ActionService) AddActions(clientID string, params []protocol.ExchangeKV) ([]string, error) {
+	if s.observer != nil {
+		s.observer(params)
+	}
+	return s.addActions(clientID, params)
+}
+
+func (s *ActionService) addActions(clientID string, params []protocol.ExchangeKV) ([]string, error) {
 	processedParams := s.GenerateCompleteBlock(params)
 	chunks := chunkExchangeParams(processedParams, protocol.MaxParamsPerFirmwareAction)
 	if len(chunks) == 0 {
