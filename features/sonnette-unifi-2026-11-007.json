@@ -1,0 +1,90 @@
+{
+  "$schema": "./schema/feature.schema.json",
+  "id": "sonnette-unifi-2026-11-007",
+  "title": "Sonnette UniFi sur la CM5 : vidéo dans le portail local et clignotement de lumières (gateway)",
+  "status": "proposed",
+  "owner": "nrineau",
+  "github": {
+    "issue": "essensys-hub/essensys-feature-lifecycle#58",
+    "project_item": null
+  },
+  "git": {
+    "branch": "feat/sonnette-unifi-2026-11-007",
+    "pr_url": null
+  },
+  "openspec": {
+    "change_id": "sonnette-unifi-2026-11-007",
+    "path": "openspec/changes/sonnette-unifi-2026-11-007",
+    "proposal": "openspec/changes/sonnette-unifi-2026-11-007/proposal.md",
+    "design": null,
+    "tasks": "openspec/changes/sonnette-unifi-2026-11-007/tasks.md",
+    "specs": [
+      "openspec/changes/sonnette-unifi-2026-11-007/specs/doorbell-gateway/spec.md"
+    ]
+  },
+  "implementation": {
+    "paths": [
+      "internal/unifi/events.go",
+      "internal/core/doorbell.go",
+      "internal/core/doorbell_settings.go",
+      "internal/core/action_service.go",
+      "internal/api/handlers_doorbell.go",
+      "internal/api/router.go",
+      "cmd/server/main.go",
+      "scripts/unifi-doorbell-probe.go"
+    ],
+    "primary_surface": "api"
+  },
+  "userguide": {
+    "pages": [
+      "README.md"
+    ],
+    "language": "fr",
+    "i18n_keys": [],
+    "screenshots": []
+  },
+  "tests": {
+    "playwright": [],
+    "junit": [
+      "internal/unifi/events_test.go",
+      "internal/core/doorbell_test.go",
+      "internal/api/handlers_doorbell_test.go"
+    ],
+    "coverage_must_test": [
+      "reglages et essai reserves a lan_admin",
+      "sequence complete finit allumee",
+      "essai a sec sans ecriture dans l'armoire",
+      "aucune adresse ni cle dans les journaux"
+    ],
+    "smoke_tags": [
+      "@nr"
+    ]
+  },
+  "release": {
+    "changelog_entry": "Gateway : sonnette UniFi (détection de la sonnerie, clignotement puis lumières choisies allumées, GET /api/doorbell/status et /stream, GET/PUT /api/admin/doorbell/settings et POST /api/admin/doorbell/test réservés à lan_admin) ; réglages dans la section doorbell du fichier des noms (#25).",
+    "target_tag": null,
+    "surfaces": [
+      "essensys-server-backend"
+    ],
+    "paths": []
+  },
+  "security": {
+    "sca_tool": "dependabot",
+    "dependabot_alerts_url": null,
+    "last_scan_at": null,
+    "cve_findings": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    },
+    "secret_scan": {
+      "status": "clean",
+      "tool": "gitleaks",
+      "last_scan_at": null
+    },
+    "muted_findings": [],
+    "threat_model_url": "../essensys-memory/openspec/changes/portal-action-merge-2026-10-007/design.md",
+    "owner_security": "nrineau"
+  }
+}
