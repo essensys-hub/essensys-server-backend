@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -147,28 +148,35 @@ type doorbellSaved struct {
 var errDoorbellSettings = errors.New("invalid_settings")
 
 // parseDoorbellBody lit {"enabled","camera_id","lights","blinks"} (les quatre clés sont
-// obligatoires).
-func parseDoorbellBody(r *http.Request) (enabled bool, camera string, lights []string, blinks int, err error) {
+// obligatoires) et, en option, "schedule" (absent : la plage actuelle est conservée).
+func parseDoorbellBody(r *http.Request) (enabled bool, camera string, lights []string, blinks int, schedule *core.DoorbellSchedule, err error) {
 	body, rerr := io.ReadAll(io.LimitReader(r.Body, doorbellMaxBody+1))
 	defer r.Body.Close()
 	if rerr != nil || len(body) > doorbellMaxBody {
-		return false, "", nil, 0, errDoorbellSettings
+		return false, "", nil, 0, nil, errDoorbellSettings
 	}
 	var in map[string]json.RawMessage
 	if json.Unmarshal(body, &in) != nil || in == nil {
-		return false, "", nil, 0, errDoorbellSettings
+		return false, "", nil, 0, nil, errDoorbellSettings
 	}
 	get := func(key string, dst any) bool {
 		raw, ok := in[key]
 		return ok && string(raw) != "null" && json.Unmarshal(raw, dst) == nil
 	}
 	if !get("enabled", &enabled) || !get("camera_id", &camera) || !get("lights", &lights) || lights == nil {
-		return false, "", nil, 0, errDoorbellSettings
+		return false, "", nil, 0, nil, errDoorbellSettings
 	}
 	if !get("blinks", &blinks) {
-		return false, "", nil, 0, core.ErrInvalidBlinks
+		return false, "", nil, 0, nil, core.ErrInvalidBlinks
 	}
-	return enabled, camera, lights, blinks, nil
+	if raw, ok := in["schedule"]; ok {
+		var sc core.DoorbellSchedule
+		if string(raw) == "null" || json.Unmarshal(raw, &sc) != nil {
+			return false, "", nil, 0, nil, core.ErrInvalidSchedule
+		}
+		schedule = &sc
+	}
+	return enabled, camera, lights, blinks, schedule, nil
 }
 
 func doorbellErrorKey(err error) (int, string) {
@@ -177,6 +185,8 @@ func doorbellErrorKey(err error) (int, string) {
 		return http.StatusBadRequest, "unknown_light"
 	case errors.Is(err, core.ErrInvalidBlinks):
 		return http.StatusBadRequest, "invalid_blinks"
+	case errors.Is(err, core.ErrInvalidSchedule):
+		return http.StatusBadRequest, "invalid_schedule"
 	case errors.Is(err, core.ErrUnknownCamera):
 		return http.StatusBadRequest, "unknown_camera"
 	case errors.Is(err, core.ErrLightNamesUnavailable):
@@ -218,9 +228,15 @@ func (h *DoorbellHandler) PutAdminSettings(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	enabled, camera, lights, blinks, err := parseDoorbellBody(r)
+	enabled, camera, lights, blinks, schedule, err := parseDoorbellBody(r)
 	if err == nil {
 		err = core.ValidateDoorbellBlinks(blinks)
+	}
+	if err == nil && schedule != nil {
+		var n core.DoorbellSchedule
+		if n, err = schedule.Normalize(); err == nil {
+			schedule = &n
+		}
 	}
 	if err == nil {
 		err = core.ValidateDoorbellLights(lights)
@@ -244,15 +260,19 @@ func (h *DoorbellHandler) PutAdminSettings(w http.ResponseWriter, r *http.Reques
 
 	if testmode.IsDryRun(r) {
 		now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+		sched := previous.Schedule
+		if schedule != nil {
+			sched = *schedule
+		}
 		writeDoorbellSaved(w, doorbellSaved{
-			DoorbellSettings: core.DoorbellSettings{Enabled: enabled, CameraID: camera, Lights: lights, Blinks: blinks, Version: previous.Version + 1, UpdatedAt: &now},
+			DoorbellSettings: core.DoorbellSettings{Enabled: enabled, CameraID: camera, Lights: lights, Blinks: blinks, Schedule: sched, Version: previous.Version + 1, UpdatedAt: &now},
 			Status:           "dry_run",
 		})
 		return
 	}
 
 	actor := audit.ActorIDFromRequest(r, "lan")
-	saved, err := h.Store.SetDoorbell(enabled, camera, lights, blinks, actor, time.Now().UTC())
+	saved, err := h.Store.SetDoorbellSchedule(enabled, camera, lights, blinks, schedule, actor, time.Now().UTC())
 	if err != nil {
 		code, key := doorbellErrorKey(err)
 		writeLightTimerError(w, code, key)
@@ -272,6 +292,13 @@ func (h *DoorbellHandler) PutAdminSettings(w http.ResponseWriter, r *http.Reques
 		}
 		newDoc, _ := json.Marshal(doorbellAuditView(saved))
 		_ = h.Audit.EmitUserAction(r.Context(), "lan_user", actor, "doorbell_settings", string(newDoc), details)
+		if sd := doorbellScheduleAuditDetails(previous, saved); sd != nil {
+			if u, ok := audit.UserFromRequest(r); ok {
+				sd["lan_user_id"] = u.ID
+			}
+			newSched, _ := json.Marshal(saved.Schedule)
+			_ = h.Audit.EmitUserAction(r.Context(), "lan_user", actor, "doorbell_schedule", string(newSched), sd)
+		}
 	}
 	if h.OnSettingsChanged != nil {
 		h.OnSettingsChanged()
@@ -282,6 +309,20 @@ func (h *DoorbellHandler) PutAdminSettings(w http.ResponseWriter, r *http.Reques
 // doorbellAuditView : l'identifiant de caméra n'est pas écrit dans le journal d'audit.
 func doorbellAuditView(s core.DoorbellSettings) map[string]any {
 	return map[string]any{"enabled": s.Enabled, "lights": s.Lights, "blinks": s.Blinks, "version": s.Version}
+}
+
+// doorbellScheduleAuditDetails décrit un changement de plage horaire (événement
+// doorbell_schedule) ; nil quand la plage n'a pas changé.
+func doorbellScheduleAuditDetails(previous, saved core.DoorbellSettings) map[string]any {
+	if reflect.DeepEqual(previous.Schedule, saved.Schedule) {
+		return nil
+	}
+	return map[string]any{
+		"event":    "doorbell_schedule",
+		"version":  saved.Version,
+		"previous": previous.Schedule,
+		"new":      saved.Schedule,
+	}
 }
 
 // PostAdminTest handles POST /api/admin/doorbell/test : joue la séquence comme une vraie

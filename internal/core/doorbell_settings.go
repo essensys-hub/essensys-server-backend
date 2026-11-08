@@ -29,24 +29,26 @@ var (
 
 // DoorbellSettings est le document des réglages (contrat d'API).
 type DoorbellSettings struct {
-	Enabled   bool     `json:"enabled"`
-	CameraID  string   `json:"camera_id"`
-	Lights    []string `json:"lights"`
-	Blinks    int      `json:"blinks"`
-	Version   int      `json:"version"`
-	UpdatedAt *string  `json:"updated_at"`
-	UpdatedBy string   `json:"updated_by"`
+	Enabled   bool             `json:"enabled"`
+	CameraID  string           `json:"camera_id"`
+	Lights    []string         `json:"lights"`
+	Blinks    int              `json:"blinks"`
+	Schedule  DoorbellSchedule `json:"schedule"`
+	Version   int              `json:"version"`
+	UpdatedAt *string          `json:"updated_at"`
+	UpdatedBy string           `json:"updated_by"`
 }
 
 // doorbellDoc est la section du fichier.
 type doorbellDoc struct {
-	Enabled   bool     `json:"enabled"`
-	CameraID  string   `json:"camera_id"`
-	Lights    []string `json:"lights"`
-	Blinks    int      `json:"blinks"`
-	Version   int      `json:"version"`
-	UpdatedAt string   `json:"updated_at"`
-	UpdatedBy string   `json:"updated_by"`
+	Enabled   bool              `json:"enabled"`
+	CameraID  string            `json:"camera_id"`
+	Lights    []string          `json:"lights"`
+	Blinks    int               `json:"blinks"`
+	Schedule  *DoorbellSchedule `json:"schedule,omitempty"`
+	Version   int               `json:"version"`
+	UpdatedAt string            `json:"updated_at"`
+	UpdatedBy string            `json:"updated_by"`
 }
 
 func (d doorbellDoc) normalized() doorbellDoc {
@@ -59,11 +61,23 @@ func (d doorbellDoc) normalized() doorbellDoc {
 	return d
 }
 
+// schedule renvoie la plage normalisée ; absente ou illisible : toujours actif.
+func (d doorbellDoc) schedule() DoorbellSchedule {
+	if d.Schedule == nil {
+		return DefaultDoorbellSchedule()
+	}
+	n, err := d.Schedule.Normalize()
+	if err != nil {
+		return DefaultDoorbellSchedule()
+	}
+	return n
+}
+
 func (d doorbellDoc) view() DoorbellSettings {
 	d = d.normalized()
 	v := DoorbellSettings{
 		Enabled: d.Enabled, CameraID: d.CameraID, Lights: append([]string{}, d.Lights...),
-		Blinks: d.Blinks, Version: d.Version, UpdatedBy: d.UpdatedBy,
+		Blinks: d.Blinks, Schedule: d.schedule(), Version: d.Version, UpdatedBy: d.UpdatedBy,
 	}
 	if d.UpdatedAt != "" {
 		at := d.UpdatedAt
@@ -134,6 +148,20 @@ func (s *LightNameStore) Doorbell() DoorbellSettings {
 // Les valeurs doivent avoir été validées par l'appelant (ValidateDoorbell*) ; toutes les autres
 // sections du fichier sont réécrites telles quelles.
 func (s *LightNameStore) SetDoorbell(enabled bool, cameraID string, lights []string, blinks int, by string, now time.Time) (DoorbellSettings, error) {
+	return s.SetDoorbellSchedule(enabled, cameraID, lights, blinks, nil, by, now)
+}
+
+// SetDoorbellSchedule est SetDoorbell avec la plage horaire ; schedule nil : la plage actuelle
+// est conservée.
+func (s *LightNameStore) SetDoorbellSchedule(enabled bool, cameraID string, lights []string, blinks int, schedule *DoorbellSchedule, by string, now time.Time) (DoorbellSettings, error) {
+	var sched *DoorbellSchedule
+	if schedule != nil {
+		n, err := schedule.Normalize()
+		if err != nil {
+			return DoorbellSettings{}, err
+		}
+		sched = &n
+	}
 	if err := ValidateDoorbellLights(lights); err != nil {
 		return DoorbellSettings{}, err
 	}
@@ -153,7 +181,11 @@ func (s *LightNameStore) SetDoorbell(enabled bool, cameraID string, lights []str
 	if err != nil {
 		return DoorbellSettings{}, err
 	}
+	if sched == nil {
+		sched = cur.Schedule
+	}
 	next := doorbellDoc{
+		Schedule:  sched,
 		Enabled:   enabled,
 		CameraID:  cameraID,
 		Lights:    append([]string{}, lights...),
