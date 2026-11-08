@@ -782,6 +782,27 @@ Cloud synchronisation: at every cycle, one call per kind (`POST /api/gateway/lig
 
 ---
 
+### GET /api/doorbell/status, GET /api/doorbell/stream, GET/PUT /api/admin/doorbell/settings and POST /api/admin/doorbell/test
+
+UniFi doorbell (feature `sonnette-unifi-2026-11-007`, local gateway only, nothing goes through the cloud). The gateway listens to the ring event of the chosen UniFi Protect camera (event stream of the console, with an automatic fallback to polling the camera every 2 s if the stream is not exposed), reconnects with a growing delay (1 s to 60 s) and never logs the console address, the API key or a camera identifier. It needs the existing `unifi:` block (`enabled`, `base_url`, `api_key`); with UniFi disabled the gateway runs normally and `available` is `false`.
+
+- `GET /api/doorbell/status` (any authenticated LAN user, open when LAN IAM is disabled): `{"enabled":false,"available":false,"ringing":false,"ringing_until":null,"last_ring_at":null}`. `ringing` stays true for 60 s after a press; `available` is true only when the function is enabled and the console is reachable.
+- `GET /api/doorbell/stream` (same rights): a series of still images served by the gateway as `multipart/x-mixed-replace` (about one image per second, not a smooth video); the API key and the console address never leave the gateway. `503 doorbell_unavailable` when the console is unreachable, UniFi is disabled or the function is not set up.
+- `GET /api/admin/doorbell/settings` and `PUT /api/admin/doorbell/settings` (`lan_admin` only, open when LAN IAM is disabled): `{"enabled":true,"camera_id":"<camera>","lights":["salon","entree"],"blinks":3}`, all four keys required. Default: disabled, no light, 5 blinks. Answers `200` with the settings plus `version`, `updated_at`, `updated_by` and `"status":"saved"`. Errors: `400 unknown_light` (identifier outside the 33 lights, duplicate), `400 invalid_blinks` (not 1 to 10), `400 unknown_camera` (not a camera of the console, or empty while enabled), `400 invalid_settings` (unreadable body), `503 names_unavailable` (no valid storage), `503 doorbell_unavailable` (console unreachable while checking the camera). Dry run (`X-Essensys-Test-Mode: dry-run`) validates and answers `"status":"dry_run"` without writing. Every change is audited (event `doorbell_settings`, without the camera identifier).
+- `POST /api/admin/doorbell/test` (`lan_admin` only): plays the sequence like a real press and answers `{"status":"started","ringing":true,"ringing_until":"…","sequence":true,"lights":2}`. With `X-Essensys-Test-Mode: dry-run` nothing is written to the exchange table (`"status":"dry_run"`).
+
+Blinking: for each chosen light the gateway reads its current state, alternates on and off `blinks` times (2 s per phase, because the cabinet reads orders at its own pace), then restores the original state. Only the chosen lights are written (indices 605 to 616 of the exchange table, through the usual light command path), never shutters. One sequence at a time: a press during a sequence is ignored, a press within 30 s of the start of a sequence shows the video again but does not blink again. A light commanded by hand during the sequence leaves it and is not restored. The state of a light is read from the last orders of the exchange table; when it is unknown the light is restored off.
+
+Storage: **the same file and the same `light_names.path` key as the names, no new setting.** One more section, `doorbell`, is an object (not a name table); writing any section keeps all the others and any unknown section untouched. Without a valid path, `GET` serves the defaults and `PUT` answers `503 names_unavailable`.
+
+```json
+{"version":1,"lights":{},"shutters":{},"doorbell":{"enabled":true,"camera_id":"<camera>","lights":["salon","entree"],"blinks":3,"version":2,"updated_at":"2026-11-08T10:15:30.123Z","updated_by":"admin@example.org"}}
+```
+
+Feasibility probe (read only, run by the owner with his own key; nothing is written to a file or logged): `UNIFI_BASE_URL=https://<console> UNIFI_API_KEY=<key> go run scripts/unifi-doorbell-probe.go` (add `PROBE_LISTEN_SECONDS=30` and press the doorbell to check that the ring event is exposed).
+
+---
+
 ### GET /health
 
 Health check endpoint for monitoring and load balancers. Does not require authentication.
