@@ -13,9 +13,9 @@ import (
 
 // RouterConfig groups HTTP router dependencies.
 type RouterConfig struct {
-	Handler            *Handler
-	WebHandler         *WebHandler
-	UniFiHandler       *UniFiHandler
+	Handler      *Handler
+	WebHandler   *WebHandler
+	UniFiHandler *UniFiHandler
 	// Sonnette UniFi (sonnette-unifi-2026-11-007) : nil = routes non montées.
 	DoorbellHandler    *DoorbellHandler
 	LanIAMHandler      *LanIAMHandler
