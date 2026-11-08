@@ -237,6 +237,7 @@ func main() {
 	doorbellSvc := core.NewDoorbellService(lightNames,
 		core.ExchangeDoorbellWriter{Actions: actionService, Store: store})
 	actionService.SetCommandObserver(doorbellSvc.NoteCommand)
+	doorbellSvc.Notifier = cloudAgent.NotifyDoorbellRing
 	doorbellHandler := api.NewDoorbellHandler(doorbellSvc, lightNames)
 	doorbellHandler.Audit = auditSvc
 	var doorbellSource unifi.EventSource
