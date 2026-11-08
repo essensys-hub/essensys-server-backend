@@ -6,8 +6,11 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/essensys-hub/essensys-server-backend/internal/core"
 	"github.com/essensys-hub/essensys-server-backend/internal/models"
+	"github.com/essensys-hub/essensys-server-backend/internal/unifi"
 )
 
 // sonnette-plages-push-2026-11-008 : plages horaires, routes de la gateway.
@@ -83,5 +86,70 @@ func TestDoorbellSchedule_lanUserRefuse(t *testing.T) {
 	}
 	if _, err := os.Stat(rig.path); err == nil {
 		t.Fatal("aucun fichier écrit par un refus")
+	}
+}
+
+func TestDoorbellSchedule_detailsDAudit(t *testing.T) {
+	def := core.DefaultDoorbellSchedule()
+	custom := def
+	custom.Mode = "custom"
+	prev := core.DoorbellSettings{Schedule: def, Version: 1}
+	if doorbellScheduleAuditDetails(prev, core.DoorbellSettings{Schedule: def, Version: 2}) != nil {
+		t.Fatal("plage inchangée : pas d'événement doorbell_schedule")
+	}
+	d := doorbellScheduleAuditDetails(prev, core.DoorbellSettings{Schedule: custom, Version: 2})
+	if d == nil || d["event"] != "doorbell_schedule" || d["version"] != 2 {
+		t.Fatalf("%v", d)
+	}
+}
+
+// NR: NR-server-backend-35 essensys-hub/essensys-feature-lifecycle#61
+// Plages horaires de la sonnette : section doorbell.schedule dans le fichier existant sans
+// toucher aux autres sections, erreur invalid_schedule, écriture réservée à lan_admin,
+// in_window dans l'état, « Essayer » qui ignore la plage, aucune écriture dans l'armoire hors
+// plage, aucun legacy IoT modifié.
+func Test_NR_server_backend_35_sonnette_plages_horaires(t *testing.T) {
+	rig := newDoorbellRig(t, true, true)
+	name := "Salon TV"
+	_, _ = rig.names.Set("salon", &name, "admin@example.org", time.Now())
+	before := readSections(t, rig.path)
+
+	// droits : lan_user refusé, rien d'écrit
+	custom := scheduleBody(`{"mode":"custom","timezone":"Europe/Paris","grid":` + gridJSON(strings.Repeat("0", 24)) + `}`)
+	if rig.do(http.MethodPut, "/api/admin/doorbell/settings", custom, models.LanRoleUser).Code != http.StatusForbidden {
+		t.Fatal("lan_user doit être refusé")
+	}
+	// grille invalide
+	bad := scheduleBody(`{"mode":"custom","timezone":"Europe/Paris","grid":["0"]}`)
+	if rec := rig.do(http.MethodPut, "/api/admin/doorbell/settings", bad, models.LanRoleAdmin); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_schedule") {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	// grille entièrement inactive : valide ; hors plage en permanence
+	rig.save(t, custom)
+	if after := readSections(t, rig.path); before["lights"] != after["lights"] {
+		t.Fatal("la section des noms doit rester intacte")
+	}
+	if rig.status(t, models.LanRoleUser)["in_window"] != false {
+		t.Fatal("in_window doit valoir false avec une grille inactive")
+	}
+	// une vraie pression hors plage : ringing local, aucune écriture dans l'armoire
+	rig.svc.HandleRing(unifi.RingEvent{ID: "e1", CameraID: camOK, At: time.Now()})
+	rig.svc.WaitIdle()
+	if st := rig.status(t, models.LanRoleUser); st["ringing"] != true || st["in_window"] != false {
+		t.Fatalf("%v", st)
+	}
+	if !rig.queueEmpty() {
+		t.Fatal("hors plage : aucun ordre vers l'armoire")
+	}
+	// « Essayer » ignore la plage (à sec : rien dans l'armoire, mais la séquence est annoncée)
+	rec := rig.do(http.MethodPost, "/api/admin/doorbell/test", "", models.LanRoleAdmin, "X-Essensys-Test-Mode", "dry-run")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"sequence":true`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	// legacy IoT : aucune route de l'armoire n'évoque la plage
+	for _, p := range []string{"/api/serverinfos", "/api/mystatus", "/api/myactions", "/api/done/x"} {
+		if rec := rig.do(http.MethodPost, p, "", ""); strings.Contains(rec.Body.String(), "schedule") {
+			t.Fatalf("%s ne doit pas évoquer la plage", p)
+		}
 	}
 }

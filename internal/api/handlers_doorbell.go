@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -291,6 +292,13 @@ func (h *DoorbellHandler) PutAdminSettings(w http.ResponseWriter, r *http.Reques
 		}
 		newDoc, _ := json.Marshal(doorbellAuditView(saved))
 		_ = h.Audit.EmitUserAction(r.Context(), "lan_user", actor, "doorbell_settings", string(newDoc), details)
+		if sd := doorbellScheduleAuditDetails(previous, saved); sd != nil {
+			if u, ok := audit.UserFromRequest(r); ok {
+				sd["lan_user_id"] = u.ID
+			}
+			newSched, _ := json.Marshal(saved.Schedule)
+			_ = h.Audit.EmitUserAction(r.Context(), "lan_user", actor, "doorbell_schedule", string(newSched), sd)
+		}
 	}
 	if h.OnSettingsChanged != nil {
 		h.OnSettingsChanged()
@@ -301,6 +309,20 @@ func (h *DoorbellHandler) PutAdminSettings(w http.ResponseWriter, r *http.Reques
 // doorbellAuditView : l'identifiant de caméra n'est pas écrit dans le journal d'audit.
 func doorbellAuditView(s core.DoorbellSettings) map[string]any {
 	return map[string]any{"enabled": s.Enabled, "lights": s.Lights, "blinks": s.Blinks, "version": s.Version}
+}
+
+// doorbellScheduleAuditDetails décrit un changement de plage horaire (événement
+// doorbell_schedule) ; nil quand la plage n'a pas changé.
+func doorbellScheduleAuditDetails(previous, saved core.DoorbellSettings) map[string]any {
+	if reflect.DeepEqual(previous.Schedule, saved.Schedule) {
+		return nil
+	}
+	return map[string]any{
+		"event":    "doorbell_schedule",
+		"version":  saved.Version,
+		"previous": previous.Schedule,
+		"new":      saved.Schedule,
+	}
 }
 
 // PostAdminTest handles POST /api/admin/doorbell/test : joue la séquence comme une vraie
